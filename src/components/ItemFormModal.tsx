@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { ProcurementItem } from '@/types';
 
 /* ── Types ── */
@@ -62,23 +62,26 @@ const MILESTONES = [
 export default function ItemFormModal({
   open, editingItem, disciplines, onClose, onSave, onAddDiscipline,
 }: ItemFormModalProps) {
-  const [form, setForm] = useState<ItemFormState>(emptyFormState());
+  const [form, setForm] = useState<ItemFormState>(() => editingItem ? itemToForm(editingItem) : emptyFormState());
   const [errors, setErrors] = useState<Partial<Record<keyof ItemFormState, string>>>({});
 
-  useEffect(() => {
+  // Keep track of previous props to safely update state during render phase
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevEditingItem, setPrevEditingItem] = useState(editingItem);
+
+  if (open !== prevOpen || editingItem !== prevEditingItem) {
+    setPrevOpen(open);
+    setPrevEditingItem(editingItem);
     if (open) {
       setForm(editingItem ? itemToForm(editingItem) : emptyFormState());
       setErrors({});
     }
-  }, [open, editingItem]);
+  }
 
   const set = (key: keyof ItemFormState) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm(f => ({ ...f, [key]: e.target.value }));
 
-  const setKey = (key: string) =>
-    (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm(f => ({ ...f, [key]: e.target.value }));
 
   const validate = (): boolean => {
     const errs: typeof errors = {};
@@ -233,9 +236,9 @@ export default function ItemFormModal({
             <div className="field" key={ms.label}>
               <div className="mini-label">{ms.label}</div>
               <div className="field-row-3">
-                <input type="date" className="finput" value={(form as Record<string, string>)[ms.plan]} onChange={setKey(ms.plan)} />
-                <input type="date" className="finput" value={(form as Record<string, string>)[ms.fc]}   onChange={setKey(ms.fc)} />
-                <input type="date" className="finput" value={(form as Record<string, string>)[ms.act]}  onChange={setKey(ms.act)} />
+                <input type="date" className="finput" value={form[ms.plan]} onChange={set(ms.plan)} />
+                <input type="date" className="finput" value={form[ms.fc]}   onChange={set(ms.fc)} />
+                <input type="date" className="finput" value={form[ms.act]}  onChange={set(ms.act)} />
               </div>
               <div className="field-row-3" style={{ marginTop: 4 }}>
                 <span className="mini-label" style={{ margin: 0 }}>Plan</span>
@@ -246,8 +249,8 @@ export default function ItemFormModal({
                 type="text"
                 className="finput"
                 style={{ marginTop: 8, fontSize: 13 }}
-                value={(form as Record<string, string>)[ms.note]}
-                onChange={setKey(ms.note)}
+                value={form[ms.note]}
+                onChange={set(ms.note)}
                 placeholder={ms.placeholder}
               />
             </div>

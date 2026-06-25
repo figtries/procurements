@@ -35,11 +35,35 @@ export default function ProcurementApp() {
   const [page, setPage] = useState<PageName>('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  /* ── Data state ── */
-  const [projects, setProjects]           = useState<Project[]>([]);
-  const [items, setItems]                 = useState<ProcurementItem[]>([]);
-  const [disciplines, setDisciplines]     = useState<string[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  /* ── Data state (Lazily initialized to avoid cascading renders) ── */
+  const [projects, setProjects] = useState<Project[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const stored = loadProjects();
+    if (stored.length > 0) return stored;
+    saveProjects([DUMMY_PROJECT]);
+    return [DUMMY_PROJECT];
+  });
+
+  const [items, setItems] = useState<ProcurementItem[]>(() => {
+    if (typeof window === 'undefined') return [];
+    const stored = loadItems();
+    if (stored.length > 0) return stored;
+    saveItems(DUMMY_ITEMS);
+    return DUMMY_ITEMS;
+  });
+
+  const [disciplines, setDisciplines] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    return loadDisciplines();
+  });
+
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const stored = loadActiveProject();
+    if (stored) return stored;
+    saveActiveProject(DUMMY_PROJECT.id);
+    return DUMMY_PROJECT.id;
+  });
 
   /* ── Overview filter / group ── */
   const [search, setSearch]             = useState('');
@@ -72,26 +96,11 @@ export default function ProcurementApp() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /* ── Load from localStorage on mount, seed dummy data if empty ── */
-  useEffect(() => {
-    const storedProjects = loadProjects();
-    const storedItems    = loadItems();
-    const storedDiscs    = loadDisciplines();
-    const storedActive   = loadActiveProject();
+  const [isMounted, setIsMounted] = useState(false);
 
-    if (storedProjects.length === 0) {
-      // First-time load: seed with demo data
-      saveProjects([DUMMY_PROJECT]);
-      saveItems(DUMMY_ITEMS);
-      saveActiveProject(DUMMY_PROJECT.id);
-      setProjects([DUMMY_PROJECT]);
-      setItems(DUMMY_ITEMS);
-      setActiveProjectId(DUMMY_PROJECT.id);
-    } else {
-      setProjects(storedProjects);
-      setItems(storedItems);
-      setActiveProjectId(storedActive);
-    }
-    setDisciplines(storedDiscs);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setIsMounted(true);
   }, []);
 
   const showToast = useCallback((msg: string) => {
@@ -275,6 +284,8 @@ export default function ProcurementApp() {
   const uniqueDiscs   = Array.from(new Set(projectItems.map(i => i.discipline).filter(Boolean)));
 
   /* ─────── RENDER ─────── */
+  if (!isMounted) return null;
+
   return (
     <>
       {/* Hamburger */}
