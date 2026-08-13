@@ -14,11 +14,9 @@ import ProjectsPage from '@/components/projects/ProjectsPage';
 import {
   genId,
   loadActiveProject,
-  loadDisciplines,
   loadItems,
   loadProjects,
   saveActiveProject,
-  saveDisciplines,
   saveItems,
   saveProjects,
 } from '@/lib/store';
@@ -50,11 +48,6 @@ export default function ProcurementApp() {
     if (stored.length > 0) return stored;
     saveItems(DUMMY_ITEMS);
     return DUMMY_ITEMS;
-  });
-
-  const [disciplines, setDisciplines] = useState<string[]>(() => {
-    if (typeof window === 'undefined') return [];
-    return loadDisciplines();
   });
 
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
@@ -238,17 +231,6 @@ export default function ProcurementApp() {
     }
   }
 
-  /* ─── Discipline ─── */
-  function addDiscipline() {
-    const name = window.prompt('New discipline name:');
-    if (!name?.trim()) return;
-    const trimmed = name.trim();
-    if (disciplines.includes(trimmed)) return;
-    const updated = [...disciplines, trimmed];
-    setDisciplines(updated);
-    saveDisciplines(updated);
-  }
-
   /* ─── Computed overview data ─── */
   const filteredItems = projectItems.filter(item => {
     const q = search.toLowerCase();
@@ -382,10 +364,8 @@ export default function ProcurementApp() {
       <ItemFormModal
         open={formOpen}
         editingItem={editingItem}
-        disciplines={disciplines}
         onClose={closeItemForm}
         onSave={handleSaveItem}
-        onAddDiscipline={addDiscipline}
       />
 
       {/* Delete confirm modal */}

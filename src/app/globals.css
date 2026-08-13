@@ -270,10 +270,6 @@ textarea.finput { resize: vertical; min-height: 64px; }
 .cpill { padding: 9px 14px; border: 2px solid var(--border); border-radius: 10px; background: var(--surface); font-size: 13px; font-weight: 600; transition: all 0.15s; }
 .cpill:hover { border-color: var(--accent); }
 .cpill.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
-.disc-row { display: flex; gap: 8px; align-items: stretch; }
-.disc-row .choice-pills { flex: 1; }
-.disc-add { flex-shrink: 0; padding: 9px 12px; border: 1.5px dashed var(--border); border-radius: 10px; background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
-.disc-add:hover { border-color: var(--accent); color: var(--accent); border-style: solid; }
 .form-section-label { font-size: 12px; font-weight: 700; color: var(--accent); letter-spacing: 0.3px; text-transform: uppercase; margin: 22px 0 14px; }
 .form-section-label:first-child { margin-top: 0; }
 

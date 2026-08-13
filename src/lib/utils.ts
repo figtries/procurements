@@ -1,12 +1,26 @@
 import type { ItemStatus, MilestoneEntry, ProcurementItem } from '@/types';
 
+/** Fixed engineering disciplines used across the app. */
+export const DISCIPLINES = [
+  'Process',
+  'Mechanical',
+  'Piping',
+  'Electrical',
+  'Instrument',
+  'Civil',
+  'Structural',
+  'HSE',
+] as const;
+
 export const DISCIPLINE_COLORS: Record<string, { bg: string; color: string }> = {
-  Instrument:  { bg: '#E8F1FF', color: '#007AFF' },
-  Electrical:  { bg: '#FFF6E5', color: '#B36900' },
+  Process:     { bg: '#E5F9F9', color: '#0A7A7A' },
   Mechanical:  { bg: '#E8F8EC', color: '#1E7A33' },
-  Civil:       { bg: '#FCEDEB', color: '#C73E3A' },
   Piping:      { bg: '#F3EDFF', color: '#6E3FC7' },
-  HVAC:        { bg: '#E5F9F9', color: '#0A7A7A' },
+  Electrical:  { bg: '#FFF6E5', color: '#B36900' },
+  Instrument:  { bg: '#E8F1FF', color: '#007AFF' },
+  Civil:       { bg: '#FCEDEB', color: '#C73E3A' },
+  Structural:  { bg: '#EFF1F5', color: '#4A5568' },
+  HSE:         { bg: '#FFEDF2', color: '#B32455' },
 };
 
 export function getDisciplineStyle(disc: string): { bg: string; color: string } {

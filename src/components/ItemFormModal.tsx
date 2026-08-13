@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ProcurementItem } from '@/types';
+import { DISCIPLINES } from '@/lib/utils';
 
 /* ── Types ── */
 export interface ItemFormState {
@@ -47,10 +48,8 @@ export function itemToForm(item: ProcurementItem): ItemFormState {
 interface ItemFormModalProps {
   open: boolean;
   editingItem: ProcurementItem | null;
-  disciplines: string[];
   onClose: () => void;
   onSave: (form: ItemFormState) => void;
-  onAddDiscipline: () => void;
 }
 
 const MILESTONES = [
@@ -60,7 +59,7 @@ const MILESTONES = [
 ] as const;
 
 export default function ItemFormModal({
-  open, editingItem, disciplines, onClose, onSave, onAddDiscipline,
+  open, editingItem, onClose, onSave,
 }: ItemFormModalProps) {
   const [form, setForm] = useState<ItemFormState>(() => editingItem ? itemToForm(editingItem) : emptyFormState());
   const [errors, setErrors] = useState<Partial<Record<keyof ItemFormState, string>>>({});
@@ -126,19 +125,16 @@ export default function ItemFormModal({
 
           <div className="field">
             <label className="flabel">Discipline <span className="req">*</span></label>
-            <div className="disc-row">
-              <div className="choice-pills">
-                {disciplines.map(d => (
-                  <button
-                    key={d}
-                    className={`cpill${form.discipline === d ? ' active' : ''}`}
-                    onClick={() => setForm(f => ({ ...f, discipline: d }))}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-              <button className="disc-add" onClick={onAddDiscipline}>+ New</button>
+            <div className="choice-pills">
+              {DISCIPLINES.map(d => (
+                <button
+                  key={d}
+                  className={`cpill${form.discipline === d ? ' active' : ''}`}
+                  onClick={() => setForm(f => ({ ...f, discipline: d }))}
+                >
+                  {d}
+                </button>
+              ))}
             </div>
             {errors.discipline && <div className="field-error-msg">{errors.discipline}</div>}
           </div>

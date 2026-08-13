@@ -77,7 +77,7 @@ export const DUMMY_ITEMS: ProcurementItem[] = [
   {
     id: 'item-006', projectId: pid,
     desc: 'HVAC Split System & Ducting',
-    discipline: 'HVAC', qty: 4, unit: 'Unit',
+    discipline: 'Mechanical', qty: 4, unit: 'Unit',
     vendor: 'PT. Daikin Airconditioning Indonesia', brand: 'Daikin',
     delivery: 'DDP SKN', poNo: 'PO-2402450', poDate: '2024-05-01',
     statusNote: '',
