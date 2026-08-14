@@ -1,4 +1,4 @@
-import { Folder, FolderOpen, X } from 'lucide-react';
+import { Folder, X } from 'lucide-react';
 import type { ProcurementItem, Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,7 +33,6 @@ export default function ProjectGrid({
       {projects.map(proj => {
         const isActive = activeProjectId === proj.id;
         const itemCount = items.filter(i => i.projectId === proj.id).length;
-        const Icon = isActive ? FolderOpen : Folder;
 
         return (
           <div
@@ -51,7 +50,7 @@ export default function ProjectGrid({
                 'flex size-9 shrink-0 items-center justify-center rounded-lg',
                 isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
               )}>
-                <Icon className="size-4" />
+                <Folder className="size-4" />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{proj.name}</span>

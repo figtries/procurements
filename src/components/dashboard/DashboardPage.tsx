@@ -452,21 +452,21 @@ export default function DashboardPage({
 
       {/* ── Vendor ── */}
       <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>Vendors needing follow-up</CardTitle>
+        <CardHeader className="border-b">
+          <CardTitle>Vendor Watchlist</CardTitle>
           <CardAction>
             <Badge variant="secondary" className="tabular">{vendors.length} vendors</Badge>
           </CardAction>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-(--card-spacing)">
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-44">Vendor</TableHead>
-                  <TableHead className="w-16">Item</TableHead>
+                  <TableHead className="w-16">Items</TableHead>
                   <TableHead className="w-32">Readiness</TableHead>
-                  <TableHead className="w-28">Avg. slip</TableHead>
+                  <TableHead className="w-28">Avg. Slip</TableHead>
                   <TableHead className="w-28 text-right">Status</TableHead>
                 </TableRow>
               </TableHeader>
@@ -501,7 +501,7 @@ export default function DashboardPage({
                         </div>
                       </TableCell>
                       <TableCell className={cn('text-xs font-medium tabular', v.avgSlipDays > 0 && 'text-late-fg')}>
-                        {v.avgSlipDays > 0 ? `+${v.avgSlipDays} days` : 'on time'}
+                        {v.avgSlipDays > 0 ? `+${v.avgSlipDays} days` : 'On time'}
                       </TableCell>
                       <TableCell className="text-right">
                         <StatusBadge status={v.worstStatus} />
