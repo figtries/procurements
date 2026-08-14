@@ -1,5 +1,5 @@
 import type { ProcurementItem, Project } from '@/types';
-import { deriveStatus } from './utils';
+import { deriveStatus } from './procurement';
 
 /* Seed data for a fresh install.
    Dates are generated relative to today so the demo keeps reading sensibly

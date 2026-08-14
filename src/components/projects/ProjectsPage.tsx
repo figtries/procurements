@@ -1,4 +1,4 @@
-import type { Project, ProcurementItem } from '@/types';
+import type { ProcurementItem, Project } from '@/types';
 import ProjectHero from './ProjectHero';
 import ProjectForm from './ProjectForm';
 import ProjectGrid from './ProjectGrid';
@@ -27,26 +27,19 @@ interface ProjectsPageProps {
 }
 
 export default function ProjectsPage({
-  projects,
-  items,
-  activeProject,
-  activeProjectId,
-  form,
-  onFormChange,
-  onCreateProject,
-  onSelectProject,
-  onDeleteProject,
-  onGoOverview,
-  onDeleteActiveProject,
+  projects, items, activeProject, activeProjectId, form, onFormChange,
+  onCreateProject, onSelectProject, onDeleteProject, onGoOverview, onDeleteActiveProject,
 }: ProjectsPageProps) {
   return (
-    <section className="page">
-      <div className="page-header">
-        <h1 className="page-title">Project Management</h1>
-        <p className="page-sub">Select a project or create a new one to begin.</p>
+    <div className="animate-page-in">
+      <div className="mb-6">
+        <h1 className="text-3xl font-semibold tracking-tight">Project Management</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pilih project yang ada, atau buat yang baru untuk mulai.
+        </p>
       </div>
 
-      <div className="proj-layout">
+      <div className="grid items-stretch gap-4 lg:grid-cols-[38%_minmax(0,1fr)]">
         <ProjectHero
           project={activeProject}
           items={items}
@@ -65,7 +58,9 @@ export default function ProjectsPage({
         />
       </div>
 
-      <div className="section-head">Saved Projects</div>
+      <h2 className="mb-3 mt-8 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Project tersimpan
+      </h2>
       <ProjectGrid
         projects={projects}
         items={items}
@@ -73,6 +68,6 @@ export default function ProjectsPage({
         onSelect={onSelectProject}
         onDelete={onDeleteProject}
       />
-    </section>
+    </div>
   );
 }

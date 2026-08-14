@@ -1,4 +1,4 @@
-import type { SCurvePoint } from '@/lib/utils';
+import type { SCurvePoint } from '@/lib/procurement';
 
 /* Plot area inside the 640×216 viewBox. */
 const X0 = 44, X1 = 620, Y0 = 190, Y1 = 16;
@@ -7,11 +7,14 @@ interface SCurveChartProps {
   points: SCurvePoint[];
 }
 
-/** Cumulative plan vs actual vs forecast, drawn as an inline SVG so it scales with the card. */
+/**
+ * Cumulative plan vs actual vs forecast.
+ * Drawn as inline SVG against theme tokens so it tracks light and dark.
+ */
 export default function SCurveChart({ points }: SCurveChartProps) {
   if (points.length < 2) {
     return (
-      <div className="curve-empty">
+      <div className="rounded-lg bg-muted/50 px-4 py-12 text-center text-sm text-muted-foreground">
         Butuh minimal dua bulan data jadwal untuk menggambar kurva-S.
       </div>
     );
@@ -29,8 +32,8 @@ export default function SCurveChart({ points }: SCurveChartProps) {
       .join(' ');
 
   const planPath = line(p => p.plan);
-  const actPath = line(p => p.actual);
-  const fcPath = line(p => p.forecast);
+  const actPath  = line(p => p.actual);
+  const fcPath   = line(p => p.forecast);
 
   const lastActualIdx = points.map(p => p.actual !== null).lastIndexOf(true);
   const lastActual = lastActualIdx >= 0 ? points[lastActualIdx] : null;
@@ -43,49 +46,57 @@ export default function SCurveChart({ points }: SCurveChartProps) {
   const labelEvery = points.length > 14 ? Math.ceil(points.length / 12) : 1;
 
   return (
-    <div className="chart-wrap">
+    <div className="-mx-1 overflow-x-auto px-1">
       <svg
-        className="curve"
         viewBox="0 0 640 216"
+        className="block h-auto w-full min-w-[520px]"
         role="img"
         aria-label={
-          lastActual
+          lastActual && lastActual.actual !== null
             ? `Kurva S. Realisasi ${lastActual.actual} persen terhadap rencana ${lastActual.plan} persen.`
             : 'Kurva S rencana proyek.'
         }
       >
         <defs>
           <linearGradient id="scurve-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#007AFF" stopOpacity="0.16" />
-            <stop offset="100%" stopColor="#007AFF" stopOpacity="0.01" />
+            <stop offset="0%" stopColor="var(--st-onsite)" stopOpacity="0.20" />
+            <stop offset="100%" stopColor="var(--st-onsite)" stopOpacity="0.01" />
           </linearGradient>
         </defs>
 
         {[0, 25, 50, 75, 100].map(pct => (
           <g key={pct}>
-            <line className="grid-line" x1={X0} y1={y(pct)} x2={X1} y2={y(pct)} />
-            <text className="axis-txt num" x={X0 - 8} y={y(pct) + 4} textAnchor="end">{pct}</text>
+            <line
+              x1={X0} y1={y(pct)} x2={X1} y2={y(pct)}
+              stroke="var(--border)" strokeWidth={1}
+            />
+            <text
+              x={X0 - 8} y={y(pct) + 4} textAnchor="end"
+              className="fill-muted-foreground text-[10px] font-semibold tabular"
+            >
+              {pct}
+            </text>
           </g>
         ))}
 
         {areaPath && <path d={areaPath} fill="url(#scurve-fill)" />}
 
         <path
-          d={planPath}
-          fill="none" stroke="#A1A1A6" strokeWidth={2}
+          d={planPath} fill="none"
+          stroke="var(--muted-foreground)" strokeWidth={2}
           strokeLinejoin="round" strokeLinecap="round"
         />
         {fcPath && (
           <path
-            d={fcPath}
-            fill="none" stroke="#5E5CE6" strokeWidth={2}
+            d={fcPath} fill="none"
+            stroke="var(--ms-rts)" strokeWidth={2}
             strokeDasharray="5 4" strokeLinecap="round"
           />
         )}
         {actPath && (
           <path
-            d={actPath}
-            fill="none" stroke="#007AFF" strokeWidth={2.5}
+            d={actPath} fill="none"
+            stroke="var(--st-onsite)" strokeWidth={2.5}
             strokeLinejoin="round" strokeLinecap="round"
           />
         )}
@@ -96,16 +107,25 @@ export default function SCurveChart({ points }: SCurveChartProps) {
             <line
               x1={x(lastActualIdx)} y1={y(lastActual.plan)}
               x2={x(lastActualIdx)} y2={y(lastActual.actual)}
-              stroke="#F5A623" strokeWidth={7} strokeLinecap="round" opacity={0.55}
+              stroke="var(--st-atrisk)" strokeWidth={7} strokeLinecap="round" opacity={0.5}
             />
-            <circle cx={x(lastActualIdx)} cy={y(lastActual.plan)} r={3.5} fill="#fff" stroke="#A1A1A6" strokeWidth={2} />
-            <circle cx={x(lastActualIdx)} cy={y(lastActual.actual)} r={5.5} fill="#007AFF" stroke="#fff" strokeWidth={2.5} />
+            <circle
+              cx={x(lastActualIdx)} cy={y(lastActual.plan)} r={3.5}
+              fill="var(--background)" stroke="var(--muted-foreground)" strokeWidth={2}
+            />
+            <circle
+              cx={x(lastActualIdx)} cy={y(lastActual.actual)} r={5.5}
+              fill="var(--st-onsite)" stroke="var(--card)" strokeWidth={2.5}
+            />
           </>
         )}
 
         {points.map((p, i) =>
           i % labelEvery === 0 ? (
-            <text key={p.date} className="axis-txt" x={x(i)} y={207} textAnchor="middle">
+            <text
+              key={p.date} x={x(i)} y={207} textAnchor="middle"
+              className="fill-muted-foreground text-[10px] font-semibold"
+            >
               {p.label}
             </text>
           ) : null,

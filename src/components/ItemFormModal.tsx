@@ -2,7 +2,15 @@
 
 import { useState } from 'react';
 import type { ProcurementItem } from '@/types';
-import { DISCIPLINES } from '@/lib/utils';
+import { DISCIPLINES } from '@/lib/procurement';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 
 /* ── Types ── */
 export interface ItemFormState {
@@ -45,9 +53,9 @@ export function itemToForm(item: ProcurementItem): ItemFormState {
     poNo: item.poNo, poDate: item.poDate, statusNote: item.statusNote,
     readinessDoc: String(Math.round((item.readinessDoc || 0) * 100)),
     doNo: item.doNo, termOfPayment: item.termOfPayment,
-    fatPlan: item.fat.plan,  fatFc: item.fat.forecast,  fatAct: item.fat.actual,  fatNote: item.fat.note,
-    rtsPlan: item.rts.plan,  rtsFc: item.rts.forecast,  rtsAct: item.rts.actual,  rtsNote: item.rts.note,
-    mosPlan: item.mos.plan,  mosFc: item.mos.forecast,  mosAct: item.mos.actual,  mosNote: item.mos.note,
+    fatPlan: item.fat.plan, fatFc: item.fat.forecast, fatAct: item.fat.actual, fatNote: item.fat.note,
+    rtsPlan: item.rts.plan, rtsFc: item.rts.forecast, rtsAct: item.rts.actual, rtsNote: item.rts.note,
+    mosPlan: item.mos.plan, mosFc: item.mos.forecast, mosAct: item.mos.actual, mosNote: item.mos.note,
   };
 }
 
@@ -60,18 +68,28 @@ interface ItemFormModalProps {
 }
 
 const MILESTONES = [
-  { label: 'FAT — Factory Acceptance Test', plan: 'fatPlan', fc: 'fatFc', act: 'fatAct', note: 'fatNote', placeholder: 'FAT note (optional)' },
-  { label: 'RTS — Ready To Ship',           plan: 'rtsPlan', fc: 'rtsFc', act: 'rtsAct', note: 'rtsNote', placeholder: 'RTS note (optional)' },
-  { label: 'MOS — Material On Site',        plan: 'mosPlan', fc: 'mosFc', act: 'mosAct', note: 'mosNote', placeholder: 'MOS note (optional)' },
+  { label: 'FAT — Factory Acceptance Test', plan: 'fatPlan', fc: 'fatFc', act: 'fatAct', note: 'fatNote', placeholder: 'Catatan FAT (opsional)' },
+  { label: 'RTS — Ready To Ship',           plan: 'rtsPlan', fc: 'rtsFc', act: 'rtsAct', note: 'rtsNote', placeholder: 'Catatan RTS (opsional)' },
+  { label: 'MOS — Material On Site',        plan: 'mosPlan', fc: 'mosFc', act: 'mosAct', note: 'mosNote', placeholder: 'Catatan MOS (opsional)' },
 ] as const;
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+      {children}
+    </p>
+  );
+}
 
 export default function ItemFormModal({
   open, editingItem, onClose, onSave,
 }: ItemFormModalProps) {
-  const [form, setForm] = useState<ItemFormState>(() => editingItem ? itemToForm(editingItem) : emptyFormState());
+  const [form, setForm] = useState<ItemFormState>(
+    () => (editingItem ? itemToForm(editingItem) : emptyFormState()),
+  );
   const [errors, setErrors] = useState<Partial<Record<keyof ItemFormState, string>>>({});
 
-  // Keep track of previous props to safely update state during render phase
+  // Keep track of previous props to safely reset state during the render phase.
   const [prevOpen, setPrevOpen] = useState(open);
   const [prevEditingItem, setPrevEditingItem] = useState(editingItem);
 
@@ -88,15 +106,14 @@ export default function ItemFormModal({
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm(f => ({ ...f, [key]: e.target.value }));
 
-
   const validate = (): boolean => {
     const errs: typeof errors = {};
-    if (!form.desc.trim())   errs.desc       = 'Description is required';
-    if (!form.discipline)    errs.discipline  = 'Select a discipline';
-    if (!form.vendor.trim()) errs.vendor      = 'Vendor is required';
-    if (!form.poNo.trim())   errs.poNo        = 'PO number is required';
-    if (!form.poDate)        errs.poDate      = 'PO date is required';
-    if (!form.qty || Number(form.qty) <= 0) errs.qty = 'Enter a valid quantity';
+    if (!form.desc.trim())   errs.desc       = 'Deskripsi wajib diisi';
+    if (!form.discipline)    errs.discipline = 'Pilih disiplin';
+    if (!form.vendor.trim()) errs.vendor     = 'Vendor wajib diisi';
+    if (!form.poNo.trim())   errs.poNo       = 'Nomor PO wajib diisi';
+    if (!form.poDate)        errs.poDate     = 'Tanggal PO wajib diisi';
+    if (!form.qty || Number(form.qty) <= 0) errs.qty = 'Isi jumlah yang valid';
     const readiness = Number(form.readinessDoc);
     if (form.readinessDoc !== '' && (isNaN(readiness) || readiness < 0 || readiness > 100)) {
       errs.readinessDoc = 'Isi antara 0 dan 100';
@@ -108,206 +125,189 @@ export default function ItemFormModal({
   const handleSave = () => { if (validate()) onSave(form); };
 
   return (
-    <div
-      className={`modal-bg${open ? ' open' : ''}`}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div className="modal">
-        <div className="modal-head">
-          <div className="modal-title">
-            {editingItem ? 'Edit Procurement Item' : 'Add Procurement Item'}
-          </div>
-        </div>
+    <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
+      <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
+        <DialogHeader className="border-b p-4">
+          <DialogTitle>
+            {editingItem ? 'Edit Procurement Item' : 'Tambah Procurement Item'}
+          </DialogTitle>
+          <DialogDescription>
+            Isi yang sudah diketahui — sisanya bisa dilengkapi belakangan.
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="modal-body">
+        <div className="max-h-[calc(90svh-11rem)] space-y-5 overflow-y-auto p-4">
           {/* ── Equipment ── */}
-          <div className="form-section-label">Equipment</div>
+          <SectionLabel>Equipment</SectionLabel>
 
-          <div className="field">
-            <label className="flabel">Description <span className="req">*</span></label>
-            <input
-              className={`finput${errors.desc ? ' field-error' : ''}`}
-              value={form.desc}
-              onChange={set('desc')}
-              placeholder="e.g. Microturbine Generator Package"
+          <div className="grid gap-2">
+            <Label htmlFor="if-desc">Deskripsi <span className="text-destructive">*</span></Label>
+            <Input
+              id="if-desc" value={form.desc} onChange={set('desc')}
+              aria-invalid={!!errors.desc}
+              placeholder="mis. Microturbine Generator Package"
             />
-            {errors.desc && <div className="field-error-msg">{errors.desc}</div>}
+            {errors.desc && <p className="text-xs text-destructive">{errors.desc}</p>}
           </div>
 
-          <div className="field">
-            <label className="flabel">Discipline <span className="req">*</span></label>
-            <div className="choice-pills">
+          <div className="grid gap-2">
+            <Label>Disiplin <span className="text-destructive">*</span></Label>
+            <div className="flex flex-wrap gap-2">
               {DISCIPLINES.map(d => (
-                <button
+                <Button
                   key={d}
-                  className={`cpill${form.discipline === d ? ' active' : ''}`}
+                  type="button"
+                  size="sm"
+                  variant={form.discipline === d ? 'default' : 'outline'}
                   onClick={() => setForm(f => ({ ...f, discipline: d }))}
                 >
                   {d}
-                </button>
+                </Button>
               ))}
             </div>
-            {errors.discipline && <div className="field-error-msg">{errors.discipline}</div>}
+            {errors.discipline && <p className="text-xs text-destructive">{errors.discipline}</p>}
           </div>
 
-          <div className="field">
-            <label className="flabel">Quantity &amp; Unit <span className="req">*</span></label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-              <input
-                className={`finput${errors.qty ? ' field-error' : ''}`}
-                type="number"
-                value={form.qty}
-                onChange={set('qty')}
-                placeholder="1"
-                min={0}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="if-qty">Jumlah <span className="text-destructive">*</span></Label>
+              <Input
+                id="if-qty" type="number" min={0} value={form.qty} onChange={set('qty')}
+                aria-invalid={!!errors.qty} placeholder="1"
               />
-              <input className="finput" value={form.unit} onChange={set('unit')} placeholder="Ea / Lot / Set" />
+              {errors.qty && <p className="text-xs text-destructive">{errors.qty}</p>}
             </div>
-            {errors.qty && <div className="field-error-msg">{errors.qty}</div>}
+            <div className="grid gap-2">
+              <Label htmlFor="if-unit">Satuan</Label>
+              <Input id="if-unit" value={form.unit} onChange={set('unit')} placeholder="Ea / Lot / Set" />
+            </div>
           </div>
+
+          <Separator />
 
           {/* ── Vendor ── */}
-          <div className="form-section-label">Vendor</div>
+          <SectionLabel>Vendor</SectionLabel>
 
-          <div className="field">
-            <div className="field-row">
-              <div>
-                <label className="flabel">Supplier / vendor <span className="req">*</span></label>
-                <input
-                  className={`finput${errors.vendor ? ' field-error' : ''}`}
-                  value={form.vendor}
-                  onChange={set('vendor')}
-                  placeholder="e.g. PT. Fajar Mas Murni"
-                />
-                {errors.vendor && <div className="field-error-msg">{errors.vendor}</div>}
-              </div>
-              <div>
-                <label className="flabel">Brand <span className="opt">(optional)</span></label>
-                <input className="finput" value={form.brand} onChange={set('brand')} placeholder="e.g. Flex Turbines" />
-              </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="if-vendor">Supplier / vendor <span className="text-destructive">*</span></Label>
+              <Input
+                id="if-vendor" value={form.vendor} onChange={set('vendor')}
+                aria-invalid={!!errors.vendor} placeholder="mis. PT. Fajar Mas Murni"
+              />
+              {errors.vendor && <p className="text-xs text-destructive">{errors.vendor}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="if-brand">Brand</Label>
+              <Input id="if-brand" value={form.brand} onChange={set('brand')} placeholder="mis. Flex Turbines" />
             </div>
           </div>
 
-          <div className="field">
-            <label className="flabel">Delivery term <span className="opt">(optional)</span></label>
-            <input className="finput" value={form.delivery} onChange={set('delivery')} placeholder="e.g. DDP SKN" />
+          <div className="grid gap-2">
+            <Label htmlFor="if-delivery">Delivery term</Label>
+            <Input id="if-delivery" value={form.delivery} onChange={set('delivery')} placeholder="mis. DDP SKN" />
           </div>
 
-          {/* ── PO & Status ── */}
-          <div className="form-section-label">PO &amp; Status</div>
+          <Separator />
 
-          <div className="field">
-            <div className="field-row">
-              <div>
-                <label className="flabel">PO no. <span className="req">*</span></label>
-                <input
-                  className={`finput${errors.poNo ? ' field-error' : ''}`}
-                  value={form.poNo}
-                  onChange={set('poNo')}
-                  placeholder="e.g. PO-2401888"
-                />
-                {errors.poNo && <div className="field-error-msg">{errors.poNo}</div>}
-              </div>
-              <div>
-                <label className="flabel">PO date <span className="req">*</span></label>
-                <input
-                  className={`finput${errors.poDate ? ' field-error' : ''}`}
-                  type="date"
-                  value={form.poDate}
-                  onChange={set('poDate')}
-                />
-                {errors.poDate && <div className="field-error-msg">{errors.poDate}</div>}
-              </div>
+          {/* ── PO & dokumen ── */}
+          <SectionLabel>PO &amp; Dokumen</SectionLabel>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="if-pono">No. PO <span className="text-destructive">*</span></Label>
+              <Input
+                id="if-pono" value={form.poNo} onChange={set('poNo')}
+                aria-invalid={!!errors.poNo} placeholder="mis. PO-2501855"
+              />
+              {errors.poNo && <p className="text-xs text-destructive">{errors.poNo}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="if-podate">Tanggal PO <span className="text-destructive">*</span></Label>
+              <Input
+                id="if-podate" type="date" value={form.poDate} onChange={set('poDate')}
+                aria-invalid={!!errors.poDate}
+              />
+              {errors.poDate && <p className="text-xs text-destructive">{errors.poDate}</p>}
             </div>
           </div>
 
-          <div className="field">
-            <div className="field-row">
-              <div>
-                <label className="flabel">
-                  Document readiness <span className="opt">(0–100%)</span>
-                </label>
-                <input
-                  className={`finput${errors.readinessDoc ? ' field-error' : ''}`}
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={form.readinessDoc}
-                  onChange={set('readinessDoc')}
-                  placeholder="0"
-                />
-                {errors.readinessDoc && <div className="field-error-msg">{errors.readinessDoc}</div>}
-              </div>
-              <div>
-                <label className="flabel">No. DO <span className="opt">(optional)</span></label>
-                <input
-                  className="finput"
-                  value={form.doNo}
-                  onChange={set('doNo')}
-                  placeholder="e.g. 007/SP/DO/CPPG/V/26"
-                />
-              </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="if-readiness">
+                Document readiness <span className="font-normal text-muted-foreground">(0–100%)</span>
+              </Label>
+              <Input
+                id="if-readiness" type="number" min={0} max={100}
+                value={form.readinessDoc} onChange={set('readinessDoc')}
+                aria-invalid={!!errors.readinessDoc} placeholder="0"
+              />
+              {errors.readinessDoc && <p className="text-xs text-destructive">{errors.readinessDoc}</p>}
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="if-dono">No. DO</Label>
+              <Input
+                id="if-dono" value={form.doNo} onChange={set('doNo')}
+                placeholder="mis. 007/SP/DO/CPPG/V/26"
+              />
             </div>
           </div>
 
-          <div className="field">
-            <label className="flabel">Term of payment <span className="opt">(optional)</span></label>
-            <textarea
-              className="finput"
-              value={form.termOfPayment}
-              onChange={set('termOfPayment')}
-              placeholder="e.g. 30% down payment · 70% after delivery"
+          <div className="grid gap-2">
+            <Label htmlFor="if-top">Term of payment</Label>
+            <Textarea
+              id="if-top" value={form.termOfPayment} onChange={set('termOfPayment')}
+              placeholder="mis. 30% down payment · 70% after delivery"
             />
           </div>
 
-          <div className="field">
-            <label className="flabel">Status note <span className="opt">(optional)</span></label>
-            <textarea
-              className="finput"
-              value={form.statusNote}
-              onChange={set('statusNote')}
-              placeholder="e.g. On progress fabrication"
+          <div className="grid gap-2">
+            <Label htmlFor="if-note">Status note</Label>
+            <Textarea
+              id="if-note" value={form.statusNote} onChange={set('statusNote')}
+              placeholder="mis. On progress fabrication"
             />
           </div>
+
+          <Separator />
 
           {/* ── Milestones ── */}
-          <div className="form-section-label">
-            Milestone Schedule{' '}
-            <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--text-tertiary)' }}>
-              — fill what you have
-            </span>
-          </div>
+          <SectionLabel>Milestone Schedule</SectionLabel>
 
           {MILESTONES.map(ms => (
-            <div className="field" key={ms.label}>
-              <div className="mini-label">{ms.label}</div>
-              <div className="field-row-3">
-                <input type="date" className="finput" value={form[ms.plan]} onChange={set(ms.plan)} />
-                <input type="date" className="finput" value={form[ms.fc]}   onChange={set(ms.fc)} />
-                <input type="date" className="finput" value={form[ms.act]}  onChange={set(ms.act)} />
+            <div key={ms.label} className="rounded-xl border p-3">
+              <p className="mb-3 text-sm font-medium">{ms.label}</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {([
+                  ['Plan', ms.plan],
+                  ['Forecast', ms.fc],
+                  ['Actual', ms.act],
+                ] as const).map(([label, key]) => (
+                  <div key={key} className="grid gap-1.5">
+                    <Label
+                      htmlFor={`if-${key}`}
+                      className="text-[10px] uppercase tracking-wider text-muted-foreground"
+                    >
+                      {label}
+                    </Label>
+                    <Input id={`if-${key}`} type="date" value={form[key]} onChange={set(key)} />
+                  </div>
+                ))}
               </div>
-              <div className="field-row-3" style={{ marginTop: 4 }}>
-                <span className="mini-label" style={{ margin: 0 }}>Plan</span>
-                <span className="mini-label" style={{ margin: 0 }}>Forecast</span>
-                <span className="mini-label" style={{ margin: 0 }}>Actual</span>
-              </div>
-              <input
-                type="text"
-                className="finput"
-                style={{ marginTop: 8, fontSize: 13 }}
-                value={form[ms.note]}
-                onChange={set(ms.note)}
+              <Input
+                className="mt-3 text-[13px]"
+                value={form[ms.note]} onChange={set(ms.note)}
                 placeholder={ms.placeholder}
               />
             </div>
           ))}
         </div>
 
-        <div className="modal-foot">
-          <button className="btn" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleSave}>Save</button>
-        </div>
-      </div>
-    </div>
+        <DialogFooter className="m-0 rounded-none">
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button onClick={handleSave}>Simpan</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

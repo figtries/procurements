@@ -1,9 +1,11 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Menu } from 'lucide-react';
+import { toast } from 'sonner';
 import { DUMMY_PROJECT, DUMMY_ITEMS } from '@/lib/dummyData';
 
-import BrandLogo from '@/components/BrandLogo';
+import AppSidebar from '@/components/AppSidebar';
 import DeleteModal from '@/components/DeleteModal';
 import ImportModal from '@/components/ImportModal';
 import ItemFormModal from '@/components/ItemFormModal';
@@ -12,6 +14,8 @@ import DashboardPage from '@/components/dashboard/DashboardPage';
 import OverviewPage from '@/components/dashboard/OverviewPage';
 import ItemDetail from '@/components/dashboard/ItemDetail';
 import ProjectsPage from '@/components/projects/ProjectsPage';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 
 import {
   genId,
@@ -23,7 +27,7 @@ import {
   saveProjects,
 } from '@/lib/store';
 import { exportWorkbook } from '@/lib/excelExport';
-import { deriveStatus, STATUS_LABELS } from '@/lib/utils';
+import { deriveStatus, STATUS_LABELS } from '@/lib/procurement';
 import type {
   GroupBy, ImportedRow, ItemStatus, MilestoneEntry, PageName, ProcurementItem, Project,
 } from '@/types';
@@ -38,7 +42,7 @@ export default function ProcurementApp() {
   const [page, setPage] = useState<PageName>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  /* ── Data state (Lazily initialized to avoid cascading renders) ── */
+  /* ── Data state (lazily initialised to avoid cascading renders) ── */
   const [projects, setProjects] = useState<Project[]>(() => {
     if (typeof window === 'undefined') return [];
     const stored = loadProjects();
@@ -92,12 +96,6 @@ export default function ProcurementApp() {
     name: '', client: '', location: '', pic: '', contractNo: '', handover: '',
   });
 
-  /* ── Toast ── */
-  const [toast, setToast]           = useState('');
-  const [toastVisible, setToastVisible] = useState(false);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /* ── Load from localStorage on mount, seed dummy data if empty ── */
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -105,16 +103,10 @@ export default function ProcurementApp() {
     setIsMounted(true);
   }, []);
 
-  const showToast = useCallback((msg: string) => {
-    setToast(msg);
-    setToastVisible(true);
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastVisible(false), 3000);
-  }, []);
-
   /* ── Derived ── */
   const activeProject = projects.find(p => p.id === activeProjectId) ?? null;
   const projectItems  = activeProject ? items.filter(i => i.projectId === activeProject.id) : items;
+  const attention     = projectItems.filter(i => i.status === 'late' || i.status === 'atrisk').length;
 
   /* ─── Navigation ─── */
   function nav(p: PageName) {
@@ -124,7 +116,7 @@ export default function ProcurementApp() {
 
   /* ─── Project CRUD ─── */
   function handleCreateProject() {
-    if (!pfForm.name.trim()) { showToast('Project name is required'); return; }
+    if (!pfForm.name.trim()) { toast.error('Nama project wajib diisi'); return; }
     const proj: Project = {
       id: genId(),
       name: pfForm.name.trim(),
@@ -141,7 +133,7 @@ export default function ProcurementApp() {
     setActiveProjectId(proj.id);
     saveActiveProject(proj.id);
     setPfForm({ name: '', client: '', location: '', pic: '', contractNo: '', handover: '' });
-    showToast(`Project "${proj.name}" created!`);
+    toast.success(`Project "${proj.name}" dibuat.`);
   }
 
   function handleSelectProject(id: string) {
@@ -166,7 +158,7 @@ export default function ProcurementApp() {
       saveActiveProject(next);
     }
     setDeleteOpen(false);
-    showToast('Project deleted.');
+    toast.success('Project dihapus.');
   }
 
   /* ─── Item CRUD ─── */
@@ -208,7 +200,10 @@ export default function ProcurementApp() {
       );
       setItems(updated);
       saveItems(updated);
-      showToast('Item updated.');
+      if (detailItem?.id === editingItem.id) {
+        setDetailItem({ ...editingItem, ...base, ...derived });
+      }
+      toast.success('Item diperbarui.');
     } else {
       const newItem: ProcurementItem = {
         ...base, id: genId(), ...derived, createdAt: new Date().toISOString(),
@@ -216,7 +211,7 @@ export default function ProcurementApp() {
       const updated = [...items, newItem];
       setItems(updated);
       saveItems(updated);
-      showToast('Item added.');
+      toast.success('Item ditambahkan.');
     }
     closeItemForm();
   }
@@ -268,17 +263,17 @@ export default function ProcurementApp() {
     setItems(next);
     saveItems(next);
     setImportOpen(false);
-    showToast(
-      `Import selesai — ${inserted} item baru${updated ? `, ${updated} diperbarui` : ''}.`,
-    );
+    toast.success('Import selesai', {
+      description: `${inserted} item baru${updated ? `, ${updated} diperbarui` : ''}.`,
+    });
   }
 
   /** Write the workbook and bump the project revision so the sheet header stays in step. */
   async function handleExport() {
-    if (!projectItems.length) { showToast('Belum ada item untuk di-export.'); return; }
+    if (!projectItems.length) { toast.error('Belum ada item untuk di-export.'); return; }
     setExporting(true);
     try {
-      const { revision } = await exportWorkbook(activeProject, projectItems);
+      const { revision, fileName } = await exportWorkbook(activeProject, projectItems);
       if (activeProject) {
         const nextProjects = projects.map(p =>
           p.id === activeProject.id ? { ...p, revision } : p,
@@ -286,9 +281,9 @@ export default function ProcurementApp() {
         setProjects(nextProjects);
         saveProjects(nextProjects);
       }
-      showToast(`Excel rev.${revision} berhasil diunduh.`);
+      toast.success(`Excel rev.${revision} diunduh`, { description: fileName });
     } catch (err) {
-      showToast(`Export gagal: ${(err as Error).message}`);
+      toast.error('Export gagal', { description: (err as Error).message });
     } finally {
       setExporting(false);
     }
@@ -309,7 +304,7 @@ export default function ProcurementApp() {
         setDetailItem(null);
         setPage('overview');
       }
-      showToast('Item deleted.');
+      toast.success('Item dihapus.');
       setDeleteOpen(false);
     } else {
       doDeleteProject();
@@ -346,61 +341,51 @@ export default function ProcurementApp() {
     }));
   }
 
-  const grouped      = groupItems(filteredItems);
+  const grouped       = groupItems(filteredItems);
   const uniqueVendors = Array.from(new Set(projectItems.map(i => i.vendor).filter(Boolean)));
   const uniqueDiscs   = Array.from(new Set(projectItems.map(i => i.discipline).filter(Boolean)));
+
+  const sidebar = (
+    <AppSidebar
+      page={page}
+      attention={attention}
+      exporting={exporting}
+      onNavigate={nav}
+      onImport={() => { setImportOpen(true); setSidebarOpen(false); }}
+      onExport={() => { handleExport(); setSidebarOpen(false); }}
+    />
+  );
 
   /* ─────── RENDER ─────── */
   if (!isMounted) return null;
 
   return (
     <>
-      {/* Hamburger */}
-      <button className="hamburger" onClick={() => setSidebarOpen(o => !o)}>☰</button>
-
-      {/* Sidebar overlay */}
-      <div
-        className={`sidebar-overlay${sidebarOpen ? ' open' : ''}`}
-        onClick={() => setSidebarOpen(false)}
-      />
-
-      <div className="app">
-        {/* ── Sidebar ── */}
-        <aside className={`sidebar${sidebarOpen ? ' open' : ''}`}>
-          <button className="sidebar-close" onClick={() => setSidebarOpen(false)}>✕</button>
-          <BrandLogo />
-          <div className="nav-section">Menu</div>
-          <button
-            className={`nav-btn${page === 'dashboard' ? ' active' : ''}`}
-            onClick={() => nav('dashboard')}
-          >
-            <span className="dot" /> Dashboard
-          </button>
-          <button
-            className={`nav-btn${page === 'overview' || page === 'itemDetail' ? ' active' : ''}`}
-            onClick={() => nav('overview')}
-          >
-            <span className="dot" /> Overview
-          </button>
-          <button
-            className={`nav-btn${page === 'projects' ? ' active' : ''}`}
-            onClick={() => nav('projects')}
-          >
-            <span className="dot" /> Projects
-          </button>
-
-          <div className="nav-section">Data</div>
-          <button className="nav-btn" onClick={() => { setImportOpen(true); setSidebarOpen(false); }}>
-            <span className="dot" /> Import Excel
-          </button>
-          <button className="nav-btn" onClick={() => { handleExport(); setSidebarOpen(false); }} disabled={exporting}>
-            <span className="dot" /> {exporting ? 'Menyiapkan…' : 'Export Excel'}
-          </button>
+      <div className="min-h-svh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
+        {/* Desktop rail */}
+        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 overflow-y-auto border-r bg-sidebar text-sidebar-foreground lg:block">
+          {sidebar}
         </aside>
+        <div className="hidden lg:block" aria-hidden />
 
-        {/* ── Main ── */}
-        <main>
-          {/* Dashboard page */}
+        {/* Mobile header */}
+        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur lg:hidden">
+          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+            <SheetTrigger render={<Button variant="outline" size="icon" aria-label="Buka menu" />}>
+              <Menu className="size-4" />
+            </SheetTrigger>
+            <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground">
+              <SheetTitle className="sr-only">Menu navigasi</SheetTitle>
+              {sidebar}
+            </SheetContent>
+          </Sheet>
+          <span className="truncate text-sm font-semibold">
+            {activeProject?.name ?? 'Procurement'}
+          </span>
+        </header>
+
+        {/* Main */}
+        <main className="mx-auto w-full max-w-[1120px] px-4 pb-24 pt-6 sm:px-6 lg:px-10 lg:pt-11">
           {page === 'dashboard' && (
             <DashboardPage
               project={activeProject}
@@ -412,7 +397,6 @@ export default function ProcurementApp() {
             />
           )}
 
-          {/* Projects page */}
           {page === 'projects' && (
             <ProjectsPage
               projects={projects}
@@ -429,7 +413,6 @@ export default function ProcurementApp() {
             />
           )}
 
-          {/* Overview page */}
           {page === 'overview' && (
             <OverviewPage
               projectName={activeProject?.name ?? ''}
@@ -457,21 +440,17 @@ export default function ProcurementApp() {
             />
           )}
 
-          {/* Item detail page */}
           {page === 'itemDetail' && detailItem && (
-            <section className="page">
-              <ItemDetail
-                item={detailItem}
-                onBack={() => setPage('overview')}
-                onEdit={item => openItemForm(item)}
-                onDelete={item => confirmDeleteItem(item)}
-              />
-            </section>
+            <ItemDetail
+              item={detailItem}
+              onBack={() => setPage('overview')}
+              onEdit={item => openItemForm(item)}
+              onDelete={item => confirmDeleteItem(item)}
+            />
           )}
         </main>
       </div>
 
-      {/* Excel import modal */}
       <ImportModal
         open={importOpen}
         existingItems={projectItems}
@@ -479,7 +458,6 @@ export default function ProcurementApp() {
         onConfirm={handleImportConfirm}
       />
 
-      {/* Item form modal */}
       <ItemFormModal
         open={formOpen}
         editingItem={editingItem}
@@ -487,21 +465,17 @@ export default function ProcurementApp() {
         onSave={handleSaveItem}
       />
 
-      {/* Delete confirm modal */}
       <DeleteModal
         open={deleteOpen}
-        title={deleteTarget?.type === 'project' ? 'Delete Project?' : 'Delete Item?'}
+        title={deleteTarget?.type === 'project' ? 'Hapus project?' : 'Hapus item?'}
         desc={
           deleteTarget?.type === 'project'
-            ? `This will permanently delete "${deleteTarget?.name}" and all its procurement items.`
-            : `This will permanently delete "${deleteTarget?.name}".`
+            ? `"${deleteTarget?.name}" beserta seluruh item procurement-nya akan dihapus permanen.`
+            : `"${deleteTarget?.name}" akan dihapus permanen.`
         }
         onCancel={() => setDeleteOpen(false)}
         onConfirm={doDelete}
       />
-
-      {/* Toast */}
-      <div className={`toast${toastVisible ? ' show' : ''}`}>{toast}</div>
     </>
   );
 }

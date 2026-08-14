@@ -1,9 +1,23 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import { FileSpreadsheet, TriangleAlert, Upload } from 'lucide-react';
 import type { ImportResult, ImportedRow, ProcurementItem } from '@/types';
 import { importWorkbook } from '@/lib/excelImport';
-import { DISCIPLINES, fmtDate } from '@/lib/utils';
+import { DISCIPLINES, fmtDate } from '@/lib/procurement';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 
 interface ImportModalProps {
   open: boolean;
@@ -12,10 +26,12 @@ interface ImportModalProps {
   onConfirm: (rows: ImportedRow[]) => void;
 }
 
-export default function ImportModal({ open, existingItems, onClose, onConfirm }: ImportModalProps) {
-  const [result, setResult]   = useState<ImportResult | null>(null);
+export default function ImportModal({
+  open, existingItems, onClose, onConfirm,
+}: ImportModalProps) {
+  const [result, setResult]     = useState<ImportResult | null>(null);
   const [fileName, setFileName] = useState('');
-  const [reading, setReading] = useState(false);
+  const [reading, setReading]   = useState(false);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -48,11 +64,11 @@ export default function ImportModal({ open, existingItems, onClose, onConfirm }:
     });
   };
 
-  const rows = result?.rows ?? [];
-  const selected = rows.filter(r => r.include);
-  const willUpdate = selected.filter(r => r.matchesItemId).length;
-  const willInsert = selected.length - willUpdate;
-  const duplicates = rows.filter(r => r.duplicateOf !== undefined).length;
+  const rows            = result?.rows ?? [];
+  const selected        = rows.filter(r => r.include);
+  const willUpdate      = selected.filter(r => r.matchesItemId).length;
+  const willInsert      = selected.length - willUpdate;
+  const duplicates      = rows.filter(r => r.duplicateOf !== undefined).length;
   const needsDiscipline = selected.filter(r => !r.discipline).length;
 
   const setAll = (include: boolean) => {
@@ -64,24 +80,21 @@ export default function ImportModal({ open, existingItems, onClose, onConfirm }:
   };
 
   return (
-    <div
-      className={`modal-bg${open ? ' open' : ''}`}
-      onClick={e => { if (e.target === e.currentTarget) close(); }}
-    >
-      <div className="modal modal-wide">
-        <div className="modal-head">
-          <div className="modal-title">Import dari Excel</div>
-          <div className="modal-desc" style={{ marginTop: 4 }}>
+    <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
+      <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-5xl">
+        <DialogHeader className="border-b p-4">
+          <DialogTitle>Import dari Excel</DialogTitle>
+          <DialogDescription>
             Sistem membaca setiap sheet, mengenali baris header, dan memisahkan disiplin dari
             baris section seperti “A. ELECTRICAL”.
-          </div>
-        </div>
+          </DialogDescription>
+        </DialogHeader>
 
-        <div className="modal-body">
+        <div className="max-h-[calc(90svh-11rem)] overflow-y-auto p-4">
           {/* ── Drop zone ── */}
           {!result && (
-            <div
-              className={`drop${dragging ? ' over' : ''}`}
+            <button
+              type="button"
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
               onDragLeave={() => setDragging(false)}
               onDrop={e => {
@@ -91,154 +104,200 @@ export default function ImportModal({ open, existingItems, onClose, onConfirm }:
                 if (file) readFile(file);
               }}
               onClick={() => inputRef.current?.click()}
+              className={cn(
+                'flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-14 transition',
+                dragging ? 'border-primary bg-accent' : 'bg-muted/40 hover:border-primary/50',
+              )}
             >
-              <div className="drop-icon">📄</div>
-              <div className="drop-big">
+              <Upload className="size-8 text-muted-foreground/60" />
+              <span className="text-base font-medium">
                 {reading ? 'Membaca file…' : 'Tarik file Excel ke sini'}
-              </div>
-              <div className="drop-sm">
+              </span>
+              <span className="text-sm text-muted-foreground">
                 atau klik untuk memilih · format .xlsx
-              </div>
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                style={{ display: 'none' }}
-                onChange={e => {
-                  const file = e.target.files?.[0];
-                  if (file) readFile(file);
-                }}
-              />
-            </div>
+              </span>
+              {reading && (
+                <span className="mt-1 text-xs text-muted-foreground">
+                  File besar bisa perlu beberapa detik.
+                </span>
+              )}
+            </button>
           )}
+
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            className="hidden"
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) readFile(file);
+            }}
+          />
 
           {/* ── Errors ── */}
           {result?.errors.map(err => (
-            <div className="import-alert crit" key={err}>⚠️ {err}</div>
+            <div
+              key={err}
+              className="mb-3 flex items-start gap-2.5 rounded-lg border border-late/20 bg-late-bg px-3.5 py-2.5 text-sm text-late-fg"
+            >
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>{err}</span>
+            </div>
           ))}
 
           {/* ── Preview ── */}
           {result && rows.length > 0 && (
             <>
-              <div className="import-summary">
-                <div className="is-file">
-                  <span className="is-name">{fileName}</span>
-                  <button className="is-reset" onClick={reset}>Ganti file</button>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-muted/60 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <FileSpreadsheet className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-sm font-medium">{fileName}</span>
+                  <Button variant="link" size="sm" className="h-auto p-0" onClick={reset}>
+                    Ganti file
+                  </Button>
                 </div>
-                <div className="is-stats">
-                  <span><b>{rows.length}</b> baris dibaca</span>
-                  <span><b>{result.sheetsRead.length}</b> sheet: {result.sheetsRead.join(', ')}</span>
-                  {duplicates > 0 && <span className="warn"><b>{duplicates}</b> duplikat</span>}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span><b className="text-foreground tabular">{rows.length}</b> baris dibaca</span>
+                  <span>
+                    <b className="text-foreground tabular">{result.sheetsRead.length}</b> sheet:{' '}
+                    {result.sheetsRead.join(', ')}
+                  </span>
+                  {duplicates > 0 && (
+                    <span className="text-atrisk-fg">
+                      <b className="tabular">{duplicates}</b> duplikat
+                    </span>
+                  )}
                 </div>
               </div>
 
               {needsDiscipline > 0 && (
-                <div className="import-alert warn">
+                <div className="mb-3 rounded-lg border border-atrisk/25 bg-atrisk-bg px-3.5 py-2.5 text-sm text-atrisk-fg">
                   {needsDiscipline} baris belum punya disiplin. Pilih di kolom Disiplin sebelum import.
                 </div>
               )}
 
-              <div className="import-toolbar">
-                <span className="it-count">
-                  <b>{selected.length}</b> dipilih —{' '}
-                  {willInsert} item baru
-                  {willUpdate > 0 && <>, {willUpdate} memperbarui item yang sudah ada</>}
-                </span>
-                <span className="it-actions">
-                  <button className="btn btn-sm" onClick={() => setAll(true)}>Pilih semua</button>
-                  <button className="btn btn-sm" onClick={() => setAll(false)}>Kosongkan</button>
-                </span>
+              <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  <b className="text-foreground tabular">{selected.length}</b> dipilih — {willInsert} item baru
+                  {willUpdate > 0 && `, ${willUpdate} memperbarui item yang sudah ada`}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAll(true)}>Pilih semua</Button>
+                  <Button variant="outline" size="sm" onClick={() => setAll(false)}>Kosongkan</Button>
+                </div>
               </div>
 
-              <div className="import-table-wrap">
-                <table className="import-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: 34 }}></th>
-                      <th style={{ minWidth: 190 }}>Equipment</th>
-                      <th style={{ width: 120 }}>Disiplin</th>
-                      <th style={{ minWidth: 130 }}>Vendor</th>
-                      <th style={{ width: 105 }}>PO No</th>
-                      <th style={{ width: 70 }}>Rdns</th>
-                      <th style={{ width: 100 }}>FAT</th>
-                      <th style={{ width: 100 }}>Delivery</th>
-                      <th style={{ minWidth: 150 }}>Keterangan</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <div className="max-h-[46vh] overflow-auto rounded-xl border">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-muted">
+                    <TableRow>
+                      <TableHead className="w-10" />
+                      <TableHead className="min-w-48">Equipment</TableHead>
+                      <TableHead className="w-36">Disiplin</TableHead>
+                      <TableHead className="min-w-32">Vendor</TableHead>
+                      <TableHead className="w-28">PO No</TableHead>
+                      <TableHead className="w-16 text-center">Rdns</TableHead>
+                      <TableHead className="w-28">FAT</TableHead>
+                      <TableHead className="w-28">Delivery</TableHead>
+                      <TableHead className="min-w-40">Keterangan</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {rows.map((row, i) => {
-                      const isDup = row.duplicateOf !== undefined;
+                      const isDup   = row.duplicateOf !== undefined;
                       const fatDate = row.fat.actual || row.fat.plan;
                       const mosDate = row.mos.actual || row.mos.forecast || row.mos.plan;
                       return (
-                        <tr
+                        <TableRow
                           key={`${row.sourceSheet}-${row.sourceRow}`}
-                          className={[
-                            isDup ? 'dup' : '',
-                            row.matchesItemId ? 'match' : '',
-                            row.include ? '' : 'off',
-                          ].filter(Boolean).join(' ')}
+                          className={cn(
+                            'align-top',
+                            isDup && 'bg-atrisk-bg',
+                            row.matchesItemId && 'bg-onsite-bg',
+                            !row.include && 'opacity-50',
+                          )}
                         >
-                          <td>
-                            <input
-                              type="checkbox"
+                          <TableCell>
+                            <Checkbox
                               checked={row.include}
-                              onChange={e => updateRow(i, { include: e.target.checked })}
+                              onCheckedChange={v => updateRow(i, { include: v === true })}
+                              aria-label={`Sertakan ${row.desc}`}
                             />
-                          </td>
-                          <td>
-                            <div className="it-desc">{row.desc}</div>
-                            <div className="it-src">
+                          </TableCell>
+                          <TableCell>
+                            <p className="font-medium leading-snug">{row.desc}</p>
+                            <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
                               {row.sourceSheet} · baris {row.sourceRow}
-                              {row.matchesItemId && <span className="it-badge match">memperbarui</span>}
-                              {isDup && <span className="it-badge dup">duplikat</span>}
-                            </div>
+                              {row.matchesItemId && (
+                                <Badge
+                                  variant="secondary"
+                                  className="border-transparent bg-onsite-bg px-1.5 py-0 text-[9px] text-onsite-fg"
+                                >
+                                  memperbarui
+                                </Badge>
+                              )}
+                              {isDup && (
+                                <Badge
+                                  variant="secondary"
+                                  className="border-transparent bg-atrisk-bg px-1.5 py-0 text-[9px] text-atrisk-fg"
+                                >
+                                  duplikat
+                                </Badge>
+                              )}
+                            </p>
                             {row.warnings.map(w => (
-                              <div className="it-warn" key={w}>{w}</div>
+                              <p key={w} className="mt-1 text-[10.5px] leading-snug text-atrisk-fg">{w}</p>
                             ))}
-                          </td>
-                          <td>
-                            <select
-                              className="it-select"
-                              value={row.discipline}
-                              onChange={e => updateRow(i, { discipline: e.target.value })}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={row.discipline || undefined}
+                              onValueChange={v => updateRow(i, { discipline: v ?? '' })}
                             >
-                              <option value="">— pilih —</option>
-                              {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
-                            </select>
-                          </td>
-                          <td>{row.vendor || '—'}</td>
-                          <td className="mono">{row.poNo || '—'}</td>
-                          <td className="mono center">
+                              <SelectTrigger size="sm" className="w-full">
+                                <SelectValue placeholder="— pilih —" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {DISCIPLINES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell className="text-xs">{row.vendor || '—'}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs tabular">{row.poNo || '—'}</TableCell>
+                          <TableCell className="text-center text-xs tabular">
                             {row.readinessDoc ? `${Math.round(row.readinessDoc * 100)}%` : '—'}
-                          </td>
-                          <td className="mono">
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs tabular">
                             {fatDate ? fmtDate(fatDate) : '—'}
-                            {row.fat.actual && <span className="it-tick">✓</span>}
-                          </td>
-                          <td className="mono">{mosDate ? fmtDate(mosDate) : '—'}</td>
-                          <td className="it-note">{row.statusNote || '—'}</td>
-                        </tr>
+                            {row.fat.actual && <span className="ml-1 font-bold text-ontrack-fg">✓</span>}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs tabular">
+                            {mosDate ? fmtDate(mosDate) : '—'}
+                          </TableCell>
+                          <TableCell className="max-w-56 text-[11.5px] leading-snug text-muted-foreground">
+                            <span className="line-clamp-3">{row.statusNote || '—'}</span>
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                  </tbody>
-                </table>
+                  </TableBody>
+                </Table>
               </div>
             </>
           )}
         </div>
 
-        <div className="modal-foot">
-          <button className="btn" onClick={close}>Batal</button>
-          <button
-            className="btn btn-primary"
+        <DialogFooter className="m-0 rounded-none">
+          <Button variant="outline" onClick={close}>Batal</Button>
+          <Button
             disabled={!selected.length || needsDiscipline > 0}
             onClick={() => { onConfirm(selected); reset(); }}
           >
             {selected.length ? `Import ${selected.length} item` : 'Import'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

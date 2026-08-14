@@ -1,5 +1,11 @@
-import type { Project, ProcurementItem } from '@/types';
-import { computeOverallProgress, fmtDate } from '@/lib/utils';
+import { ClipboardList, ListChecks, Trash2 } from 'lucide-react';
+import type { ProcurementItem, Project } from '@/types';
+import { computeOverallProgress, fmtDate } from '@/lib/procurement';
+import ProgBar from '@/components/dashboard/ProgBar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 interface ProjectHeroProps {
   project: Project | null;
@@ -8,74 +14,84 @@ interface ProjectHeroProps {
   onDeleteProject: () => void;
 }
 
-export default function ProjectHero({ project, items, onGoOverview, onDeleteProject }: ProjectHeroProps) {
+export default function ProjectHero({
+  project, items, onGoOverview, onDeleteProject,
+}: ProjectHeroProps) {
   if (!project) {
     return (
-      <div
-        className="proj-hero-compact"
-        style={{ borderTopColor: 'var(--text-tertiary)', alignItems: 'center', justifyContent: 'center' }}
-      >
-        <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
-          <div style={{ fontSize: 32, marginBottom: 12, opacity: 0.4 }}>📋</div>
-          <div style={{ fontSize: 15, fontWeight: 600 }}>No project selected</div>
-          <div style={{ fontSize: 13, marginTop: 6 }}>Create or select a project from below.</div>
-        </div>
-      </div>
+      <Card className="justify-center border-t-4 border-t-border py-14">
+        <CardContent className="flex flex-col items-center gap-2 text-center">
+          <ClipboardList className="size-8 text-muted-foreground/50" />
+          <p className="text-sm font-semibold">Belum ada project dipilih</p>
+          <p className="text-sm text-muted-foreground">Buat atau pilih project dari daftar di bawah.</p>
+        </CardContent>
+      </Card>
     );
   }
 
   const projItems = items.filter(i => i.projectId === project.id);
-  const progress = computeOverallProgress(projItems);
-  const late   = projItems.filter(i => i.status === 'late').length;
-  const atrisk = projItems.filter(i => i.status === 'atrisk').length;
+  const progress  = computeOverallProgress(projItems);
+  const late      = projItems.filter(i => i.status === 'late').length;
+  const atrisk    = projItems.filter(i => i.status === 'atrisk').length;
 
   return (
-    <div className="proj-hero-compact has-project">
-      <div className="phc-eyebrow">Active Project</div>
-      <div className="phc-name">{project.name}</div>
-      <div className="phc-meta">
-        {project.client   && <>{project.client} · </>}
-        {project.location && <>{project.location} · </>}
-        {project.pic      && <>PIC: {project.pic}</>}
-        {project.contractNo && <><br />Contract: {project.contractNo}</>}
-      </div>
+    <Card className="border-t-4 border-t-primary">
+      <CardContent className="flex h-full flex-col">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Project aktif
+        </p>
+        <h2 className="mt-2 text-2xl font-semibold leading-tight tracking-tight">{project.name}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          {[project.client, project.location, project.pic && `PIC: ${project.pic}`]
+            .filter(Boolean).join(' · ')}
+          {project.contractNo && <><br />Kontrak: {project.contractNo}</>}
+        </p>
 
-      <div className="phc-progress">
-        <div className="phc-prog-top">
-          <span className="phc-prog-label">Overall Progress</span>
-          <span className="phc-prog-pct">{progress}%</span>
+        <div className="mt-6">
+          <div className="mb-2 flex items-baseline justify-between">
+            <span className="text-sm font-medium text-muted-foreground">Overall Progress</span>
+            <span className="text-lg font-semibold tabular">{progress}%</span>
+          </div>
+          <ProgBar value={progress} className="h-2" />
         </div>
-        <div className="phc-prog-bar">
-          <div className="phc-prog-fill" style={{ width: `${progress}%` }} />
-        </div>
-      </div>
 
-      <div className="phc-stats">
-        <div className="phc-stat">
-          <div className="phc-stat-label">Items</div>
-          <div className="phc-stat-value">{projItems.length}</div>
-        </div>
-        <div className="phc-stat">
-          <div className="phc-stat-label">Late</div>
-          <div className={`phc-stat-value${late > 0 ? ' warn' : ''}`}>{late}</div>
-        </div>
-        <div className="phc-stat">
-          <div className="phc-stat-label">At Risk</div>
-          <div className={`phc-stat-value${atrisk > 0 ? ' warn' : ''}`}>{atrisk}</div>
-        </div>
-      </div>
+        <Separator className="my-5" />
 
-      {project.handover && (
-        <div className="phc-handover">
-          <span className="phc-handover-label">Target Handover</span>
-          <span className="phc-handover-value">{fmtDate(project.handover)}</span>
+        <div className="grid grid-cols-3 gap-4 text-center">
+          <Stat label="Items" value={projItems.length} />
+          <Stat label="Late" value={late} warn={late > 0} />
+          <Stat label="At Risk" value={atrisk} warn={atrisk > 0} />
         </div>
-      )}
 
-      <div className="phc-actions">
-        <button className="btn btn-secondary" onClick={onGoOverview}>View Overview</button>
-        <button className="btn btn-danger" onClick={onDeleteProject}>Delete Project</button>
-      </div>
+        {project.handover && (
+          <div className="mt-5 flex items-center justify-between rounded-lg bg-muted/60 px-4 py-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+              Target handover
+            </span>
+            <span className="text-sm font-semibold tabular">{fmtDate(project.handover)}</span>
+          </div>
+        )}
+
+        <div className="mt-auto flex gap-2 pt-6">
+          <Button className="flex-1" variant="outline" onClick={onGoOverview}>
+            <ListChecks className="size-4" />
+            Lihat Overview
+          </Button>
+          <Button variant="destructive" onClick={onDeleteProject}>
+            <Trash2 className="size-4" />
+            Hapus
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Stat({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 text-xl font-semibold tabular', warn && 'text-late-fg')}>{value}</p>
     </div>
   );
 }

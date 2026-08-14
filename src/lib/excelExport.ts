@@ -3,7 +3,7 @@ import type { Anomaly, ItemStatus, MilestoneEntry, ProcurementItem, Project } fr
 import {
   STATUS_LABELS, computeDeviation, computeOverallProgress, detectAnomalies,
   disciplineBreakdown, fmtDate, milestoneStats, today, vendorStats,
-} from './utils';
+} from './procurement';
 
 /* ═══════════════════════════════════════════════════════════
    Export the whole project as a workbook the client can send on

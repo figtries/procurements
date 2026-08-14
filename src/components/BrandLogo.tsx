@@ -2,18 +2,17 @@ import Image from 'next/image';
 
 export default function BrandLogo() {
   return (
-    <div className="brand-group">
+    <div className="flex items-center gap-3 px-2 py-1">
       <Image
-        className="brand-mark"
         src="/figtries.png"
         alt="Figtries"
         width={36}
         height={36}
-        style={{ width: 'auto', height: '36px', objectFit: 'contain' }}
+        className="h-9 w-auto shrink-0 object-contain"
       />
-      <div>
-        <p className="brand-name">Procurement</p>
-        <p className="brand-sub">&amp; Vendor · Figtries</p>
+      <div className="min-w-0 leading-tight">
+        <p className="truncate text-sm font-semibold tracking-tight">Procurement</p>
+        <p className="truncate text-xs text-muted-foreground">&amp; Vendor · Figtries</p>
       </div>
     </div>
   );

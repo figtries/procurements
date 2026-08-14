@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import type { ImportResult, MilestoneEntry, ProcurementItem } from '@/types';
 import { EXPORT_MARKER, PRIMARY_SHEET } from './excelExport';
-import { DISCIPLINES } from './utils';
+import { DISCIPLINES } from './procurement';
 
 /* ═══════════════════════════════════════════════════════════
    Reading the spreadsheets procurement teams actually keep.

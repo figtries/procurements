@@ -1,12 +1,19 @@
+import { cn } from '@/lib/utils';
+
 interface ProgBarProps {
   value: number;
-  color?: string;
+  className?: string;
+  /** Tailwind class for the filled portion. Defaults to the primary colour. */
+  indicatorClassName?: string;
 }
 
-export default function ProgBar({ value, color }: ProgBarProps) {
+export default function ProgBar({ value, className, indicatorClassName }: ProgBarProps) {
   return (
-    <div className="prog-bar">
-      <div className="prog-fill" style={{ width: `${value}%`, background: color }} />
+    <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-muted', className)}>
+      <div
+        className={cn('h-full rounded-full bg-primary transition-all', indicatorClassName)}
+        style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+      />
     </div>
   );
 }

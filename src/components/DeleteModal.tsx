@@ -1,3 +1,11 @@
+'use client';
+
+import { TriangleAlert } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+
 interface DeleteModalProps {
   open: boolean;
   title: string;
@@ -8,18 +16,20 @@ interface DeleteModalProps {
 
 export default function DeleteModal({ open, title, desc, onCancel, onConfirm }: DeleteModalProps) {
   return (
-    <div className={`modal-bg${open ? ' open' : ''}`}>
-      <div className="modal modal-sm">
-        <div className="modal-body">
-          <div className="modal-icon">!</div>
-          <div className="modal-title">{title}</div>
-          <div className="modal-desc">{desc}</div>
-        </div>
-        <div className="modal-foot">
-          <button className="btn" onClick={onCancel}>Cancel</button>
-          <button className="btn btn-danger" onClick={onConfirm}>Delete</button>
-        </div>
-      </div>
-    </div>
+    <Dialog open={open} onOpenChange={next => { if (!next) onCancel(); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <span className="mb-1 flex size-11 items-center justify-center rounded-xl bg-late-bg text-late-fg">
+            <TriangleAlert className="size-5" />
+          </span>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{desc}</DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel}>Batal</Button>
+          <Button variant="destructive" onClick={onConfirm}>Hapus</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

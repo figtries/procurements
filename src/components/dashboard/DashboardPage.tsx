@@ -1,14 +1,29 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import {
+  ArrowDownToLine, ArrowUpFromLine, CalendarClock, CheckCircle2, FileWarning,
+  PackageSearch, Receipt, Ship, TriangleAlert,
+} from 'lucide-react';
 import type { Anomaly, ProcurementItem, Project } from '@/types';
 import {
-  STATUS_LABELS, buildLookahead, buildSCurve, computeDeviation, detectAnomalies,
+  buildLookahead, buildSCurve, computeDeviation, daysDiff, detectAnomalies,
   disciplineBreakdown, fmtDate, getDisciplineStyle, milestoneStats, today, vendorStats,
-  daysDiff,
-} from '@/lib/utils';
+} from '@/lib/procurement';
 import SCurveChart from './SCurveChart';
 import StatTile from './StatTile';
+import StatusBadge from './Badge';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle,
+} from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 
 interface DashboardPageProps {
   project: Project | null;
@@ -20,21 +35,37 @@ interface DashboardPageProps {
 }
 
 const LOOKAHEAD_OPTIONS = [
-  { weeks: 4, label: '4 minggu' },
-  { weeks: 8, label: '8 minggu' },
-  { weeks: 13, label: 'Kuartal' },
-] as const;
+  { weeks: '4',  label: '4 minggu' },
+  { weeks: '8',  label: '8 minggu' },
+  { weeks: '13', label: 'Kuartal' },
+];
+
+/** Icon per anomaly rule, so the list scans without reading every line. */
+const ANOMALY_ICON = {
+  'milestone-overdue': TriangleAlert,
+  'readiness-low-delivery-near': FileWarning,
+  'no-po-but-scheduled': Receipt,
+  'forecast-slipped': Ship,
+  'delivered-no-do': PackageSearch,
+} as const;
+
+const MS_ACCENT: Record<string, string> = {
+  fat: 'bg-onsite-bg text-onsite-fg',
+  rts: 'bg-rts-bg text-rts-fg',
+  mos: 'bg-ontrack-bg text-ontrack-fg',
+};
 
 export default function DashboardPage({
   project, items, onOpenItem, onImport, onExport, exporting,
 }: DashboardPageProps) {
-  const [weeks, setWeeks] = useState<number>(4);
+  const [weeks, setWeeks] = useState('4');
+  const weekCount = Number(weeks);
 
   const deviation   = useMemo(() => computeDeviation(items, project), [items, project]);
   const curve       = useMemo(() => buildSCurve(items, project), [items, project]);
   const milestones  = useMemo(() => milestoneStats(items), [items]);
   const disciplines = useMemo(() => disciplineBreakdown(items), [items]);
-  const lookahead   = useMemo(() => buildLookahead(items, weeks), [items, weeks]);
+  const lookahead   = useMemo(() => buildLookahead(items, weekCount), [items, weekCount]);
   const anomalies   = useMemo(() => detectAnomalies(items), [items]);
   const vendors     = useMemo(() => vendorStats(items), [items]);
 
@@ -51,125 +82,162 @@ export default function DashboardPage({
     late:    items.filter(i => i.status === 'late').length,
   };
 
-  const uniqueVendors = new Set(items.map(i => i.vendor.trim()).filter(Boolean)).size;
+  const uniqueVendors  = new Set(items.map(i => i.vendor.trim()).filter(Boolean)).size;
   const daysToHandover = project?.handover ? daysDiff(today(), project.handover) : null;
 
-  /* Show the worst few; the rest stay one click away in Overview. */
   const topAnomalies = anomalies.slice(0, 6);
-  const topVendors = vendors.slice(0, 5);
+  const topVendors   = vendors.slice(0, 5);
+  const behind       = deviation.deviation < 0;
+
+  const header = (
+    <div className="mb-6">
+      {project && (
+        <p className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span>{[project.name, project.client, project.location].filter(Boolean).join(' · ')}</span>
+          {project.revision ? (
+            <Badge variant="outline" className="tabular">rev.{project.revision}</Badge>
+          ) : null}
+        </p>
+      )}
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ringkasan posisi sekarang terhadap rencana, dan apa yang jatuh tempo berikutnya.
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" onClick={onImport}>
+            <ArrowDownToLine className="size-4" />
+            Import Excel
+          </Button>
+          <Button onClick={onExport} disabled={!items.length || exporting}>
+            <ArrowUpFromLine className="size-4" />
+            {exporting ? 'Menyiapkan…' : 'Export Excel'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 
   if (!items.length) {
     return (
-      <section className="page">
-        <DashboardHeader
-          project={project}
-          onImport={onImport}
-          onExport={onExport}
-          exporting={exporting}
-          canExport={false}
-        />
-        <div className="empty">
-          <div className="empty-icon">📊</div>
-          <div>Belum ada item untuk dirangkum.</div>
-          <div style={{ fontSize: 13, marginTop: 8, color: 'var(--text-tertiary)' }}>
-            Import file Excel yang sudah ada, atau tambahkan item dari halaman Overview.
-          </div>
-          <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={onImport}>
-            Import Excel
-          </button>
-        </div>
-      </section>
+      <div className="animate-page-in">
+        {header}
+        <Card className="py-16">
+          <CardContent className="flex flex-col items-center gap-3 text-center">
+            <PackageSearch className="size-9 text-muted-foreground/50" />
+            <p className="font-medium">Belum ada item untuk dirangkum.</p>
+            <p className="max-w-sm text-sm text-muted-foreground">
+              Import file Excel yang sudah ada, atau tambahkan item dari halaman Overview.
+            </p>
+            <Button className="mt-2" onClick={onImport}>
+              <ArrowDownToLine className="size-4" />
+              Import Excel
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
-    <section className="page">
-      <DashboardHeader
-        project={project}
-        onImport={onImport}
-        onExport={onExport}
-        exporting={exporting}
-        canExport
-      />
+    <div className="animate-page-in">
+      {header}
 
       {/* ── Deviasi + kurva-S ── */}
-      <div className="hero-row">
-        <div className={`card dev-hero${deviation.deviation < 0 ? ' behind' : ' ahead'}`}>
-          <div className="dev-eyebrow">Deviasi terhadap rencana</div>
-          <div className="dev-big">
-            {deviation.deviation > 0 ? '+' : deviation.deviation < 0 ? '−' : ''}
-            {Math.abs(deviation.deviation)}<span className="pct">%</span>
-          </div>
-          <div className="dev-caption">
-            {deviation.deviation < 0 ? (
-              <>
-                Realisasi tertinggal dari kurva rencana
-                {deviation.slipDays > 0 && <> — setara <b>±{deviation.slipDays} hari</b> keterlambatan</>}.
-              </>
-            ) : deviation.deviation > 0 ? (
-              <>Realisasi mendahului rencana. Jadwal aman.</>
-            ) : (
-              <>Realisasi tepat di garis rencana.</>
+      <div className="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+        <Card className={cn('border-t-4', behind ? 'border-t-atrisk' : 'border-t-ontrack')}>
+          <CardContent className="flex h-full flex-col">
+            <p className={cn(
+              'text-[11px] font-semibold uppercase tracking-wider',
+              behind ? 'text-atrisk-fg' : 'text-ontrack-fg',
+            )}>
+              Deviasi terhadap rencana
+            </p>
+
+            <p className={cn(
+              'mt-3 text-5xl font-semibold leading-none tracking-tighter tabular',
+              behind ? 'text-atrisk-fg' : 'text-ontrack-fg',
+            )}>
+              {deviation.deviation > 0 ? '+' : deviation.deviation < 0 ? '−' : ''}
+              {Math.abs(deviation.deviation)}
+              <span className="text-2xl tracking-tight">%</span>
+            </p>
+
+            <p className="mt-2.5 text-sm text-muted-foreground">
+              {behind ? (
+                <>
+                  Realisasi tertinggal dari kurva rencana
+                  {deviation.slipDays > 0 && (
+                    <> — setara <span className="font-medium text-foreground">±{deviation.slipDays} hari</span> keterlambatan</>
+                  )}.
+                </>
+              ) : deviation.deviation > 0
+                ? 'Realisasi mendahului rencana. Jadwal aman.'
+                : 'Realisasi tepat di garis rencana.'}
+            </p>
+
+            <Separator className="my-5" />
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Rencana</p>
+                <p className="mt-1 text-2xl font-semibold tracking-tight text-muted-foreground tabular">
+                  {deviation.planPct}%
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Aktual</p>
+                <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{deviation.actualPct}%</p>
+              </div>
+            </div>
+
+            <div className="mt-5 space-y-2.5">
+              <Bar label="Plan" value={deviation.planPct} className="bg-muted-foreground/60" />
+              <Bar label="Act"  value={deviation.actualPct} className="bg-onsite" />
+            </div>
+
+            {project?.handover && (
+              <p className="mt-auto pt-5 text-xs text-muted-foreground">
+                Target handover <span className="font-medium text-foreground">{fmtDate(project.handover)}</span>
+                {daysToHandover !== null && (
+                  daysToHandover >= 0
+                    ? ` · sisa ${daysToHandover} hari`
+                    : ` · lewat ${Math.abs(daysToHandover)} hari`
+                )}
+              </p>
             )}
-          </div>
+          </CardContent>
+        </Card>
 
-          <div className="dev-split">
-            <div>
-              <div className="dev-cell-label">Rencana</div>
-              <div className="dev-cell-value plan">{deviation.planPct}%</div>
-            </div>
-            <div>
-              <div className="dev-cell-label">Aktual</div>
-              <div className="dev-cell-value act">{deviation.actualPct}%</div>
-            </div>
-          </div>
-
-          <div className="dev-bars">
-            <div className="dev-bar-row">
-              <span className="dev-bar-key">Plan</span>
-              <span className="dev-bar"><i className="plan" style={{ width: `${deviation.planPct}%` }} /></span>
-            </div>
-            <div className="dev-bar-row">
-              <span className="dev-bar-key">Act</span>
-              <span className="dev-bar"><i className="act" style={{ width: `${deviation.actualPct}%` }} /></span>
-            </div>
-          </div>
-
-          {project?.handover && (
-            <div className="dev-foot">
-              Target handover <b>{fmtDate(project.handover)}</b>
-              {daysToHandover !== null && (
-                daysToHandover >= 0 ? <> · sisa {daysToHandover} hari</> : <> · lewat {Math.abs(daysToHandover)} hari</>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div className="card curve-card">
-          <div className="card-head">
-            <div className="card-title">Kurva-S · Rencana vs Realisasi</div>
-            <div className="legend">
-              <span className="lg"><span className="swatch plan" />Rencana</span>
-              <span className="lg"><span className="swatch act" />Realisasi</span>
-              <span className="lg"><span className="swatch fc" />Proyeksi</span>
-            </div>
-          </div>
-          <div className="card-sub">
-            Progres kumulatif seluruh item, dibobot rata dari tanggal milestone
-          </div>
-          <SCurveChart points={curve} />
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Kurva-S · Rencana vs Realisasi</CardTitle>
+            <CardDescription>
+              Progres kumulatif seluruh item, dibobot rata dari tanggal milestone
+            </CardDescription>
+            <CardAction className="hidden gap-4 sm:flex">
+              <Legend swatch="bg-muted-foreground" label="Rencana" />
+              <Legend swatch="bg-onsite" label="Realisasi" />
+              <Legend swatch="bg-rts" label="Proyeksi" />
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <SCurveChart points={curve} />
+          </CardContent>
+        </Card>
       </div>
 
       {/* ── Tiles ── */}
-      <div className="tiles">
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile
           label="Total Item" value={items.length}
           sub={`${disciplines.length} disiplin · ${uniqueVendors} vendor`} variant="accent"
         />
         <StatTile
           label="On Site" value={counts.onsite}
-          sub={items.length ? `${Math.round((counts.onsite / items.length) * 100)}% terkirim` : '—'}
+          sub={`${Math.round((counts.onsite / items.length) * 100)}% terkirim`}
           variant={counts.onsite > 0 ? 'good' : 'default'}
         />
         <StatTile label="On Track" value={counts.ontrack} sub="Sesuai jadwal" />
@@ -184,259 +252,325 @@ export default function DashboardPage({
       </div>
 
       {/* ── Milestone + disiplin ── */}
-      <div className="two-col">
-        <div className="card">
-          <div className="card-head"><div className="card-title">Posisi milestone</div></div>
-          <div className="card-sub">Berapa item sudah melewati tiap tahap, dari {items.length} item</div>
-
-          <div className="ms-list">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_minmax(0,1fr)]">
+        <Card>
+          <CardHeader>
+            <CardTitle>Posisi milestone</CardTitle>
+            <CardDescription>
+              Berapa item sudah melewati tiap tahap, dari {items.length} item
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
             {milestones.map(ms => {
               const pct = (n: number) => (ms.total ? (n / ms.total) * 100 : 0);
               return (
-                <div className="ms-item" key={ms.key}>
-                  <div className="ms-top">
-                    <span className="ms-name">
-                      <span className={`code ${ms.key}`}>{ms.label}</span>{ms.name}
+                <div key={ms.key} className="space-y-2">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide', MS_ACCENT[ms.key])}>
+                        {ms.label}
+                      </span>
+                      <span className="text-muted-foreground">{ms.name}</span>
                     </span>
-                    <span className="ms-count">{ms.done}<span> / {ms.total}</span></span>
+                    <span className="shrink-0 text-sm font-semibold tabular">
+                      {ms.done}<span className="font-normal text-muted-foreground"> / {ms.total}</span>
+                    </span>
                   </div>
-                  <div className="ms-track">
-                    <i className="done" style={{ width: `${pct(ms.done)}%` }} />
-                    <i className="soon" style={{ width: `${pct(ms.scheduled)}%` }} />
-                    <i className="late" style={{ width: `${pct(ms.overdue)}%` }} />
+                  <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
+                    <div className="bg-ontrack" style={{ width: `${pct(ms.done)}%` }} />
+                    <div className="bg-atrisk"  style={{ width: `${pct(ms.scheduled)}%` }} />
+                    <div className="bg-late"    style={{ width: `${pct(ms.overdue)}%` }} />
                   </div>
-                  <div className="ms-legend">
-                    <span className="k"><i style={{ background: 'var(--success)' }} />Selesai <b>{ms.done}</b></span>
-                    <span className="k"><i style={{ background: 'var(--warning)' }} />Terjadwal <b>{ms.scheduled}</b></span>
-                    <span className="k"><i style={{ background: 'var(--danger)' }} />Lewat tempo <b>{ms.overdue}</b></span>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                    <Key swatch="bg-ontrack" label="Selesai" n={ms.done} />
+                    <Key swatch="bg-atrisk" label="Terjadwal" n={ms.scheduled} />
+                    <Key swatch="bg-late" label="Lewat tempo" n={ms.overdue} />
                     {ms.unplanned > 0 && (
-                      <span className="k"><i style={{ background: 'var(--separator)' }} />Belum dijadwalkan <b>{ms.unplanned}</b></span>
+                      <Key swatch="bg-muted-foreground/40" label="Belum dijadwalkan" n={ms.unplanned} />
                     )}
                   </div>
                 </div>
               );
             })}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        <div className="card">
-          <div className="card-head"><div className="card-title">Sebaran per disiplin</div></div>
-          <div className="card-sub">Komposisi status tiap disiplin</div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Sebaran per disiplin</CardTitle>
+            <CardDescription>Komposisi status tiap disiplin</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {disciplines.map(d => {
+                const style = getDisciplineStyle(d.discipline);
+                const w = (n: number) => (d.total ? (n / d.total) * 100 : 0);
+                return (
+                  <div key={d.discipline} className="grid grid-cols-[5.75rem_minmax(0,1fr)_2rem] items-center gap-2.5">
+                    <span
+                      className="truncate rounded px-2 py-0.5 text-center text-[11px] font-semibold"
+                      style={{ background: style.bg, color: style.color }}
+                    >
+                      {d.discipline}
+                    </span>
+                    <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
+                      <div className="bg-onsite"   style={{ width: `${w(d.counts.onsite)}%` }} />
+                      <div className="bg-ontrack"  style={{ width: `${w(d.counts.ontrack)}%` }} />
+                      <div className="bg-atrisk"   style={{ width: `${w(d.counts.atrisk)}%` }} />
+                      <div className="bg-late"     style={{ width: `${w(d.counts.late)}%` }} />
+                      <div className="bg-planning" style={{ width: `${w(d.counts.planning)}%` }} />
+                    </div>
+                    <span className="text-right text-xs font-semibold text-muted-foreground tabular">{d.total}</span>
+                  </div>
+                );
+              })}
+            </div>
 
-          <div className="disc-rows">
-            {disciplines.map(d => {
-              const style = getDisciplineStyle(d.discipline);
-              const w = (n: number) => (d.total ? (n / d.total) * 100 : 0);
-              return (
-                <div className="disc-row" key={d.discipline}>
-                  <span className="disc-tag" style={{ background: style.bg, color: style.color }}>
-                    {d.discipline}
-                  </span>
-                  <span className="disc-stack">
-                    <i className="onsite"   style={{ width: `${w(d.counts.onsite)}%` }} />
-                    <i className="ontrack"  style={{ width: `${w(d.counts.ontrack)}%` }} />
-                    <i className="atrisk"   style={{ width: `${w(d.counts.atrisk)}%` }} />
-                    <i className="late"     style={{ width: `${w(d.counts.late)}%` }} />
-                    <i className="planning" style={{ width: `${w(d.counts.planning)}%` }} />
-                  </span>
-                  <span className="disc-n">{d.total}</span>
-                </div>
-              );
-            })}
-          </div>
+            <Separator className="my-4" />
 
-          <div className="ms-legend disc-legend">
-            <span className="k"><i style={{ background: 'var(--accent)' }} />On Site</span>
-            <span className="k"><i style={{ background: 'var(--success)' }} />On Track</span>
-            <span className="k"><i style={{ background: 'var(--warning)' }} />At Risk</span>
-            <span className="k"><i style={{ background: 'var(--danger)' }} />Late</span>
-            <span className="k"><i style={{ background: 'var(--text-tertiary)' }} />Planning</span>
-          </div>
-        </div>
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+              <Key swatch="bg-onsite" label="On Site" />
+              <Key swatch="bg-ontrack" label="On Track" />
+              <Key swatch="bg-atrisk" label="At Risk" />
+              <Key swatch="bg-late" label="Late" />
+              <Key swatch="bg-planning" label="Planning" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* ── Lookahead ── */}
-      <div className="card section-gap">
-        <div className="look-head">
-          <div>
-            <div className="card-title">Jatuh tempo berikutnya</div>
-            <div className="card-sub" style={{ marginBottom: 0 }}>
-              Milestone yang harus terjadi, dihitung dari tanggal plan dan forecast tiap item
-            </div>
-          </div>
-          <div className="seg">
-            {LOOKAHEAD_OPTIONS.map(o => (
-              <button
-                key={o.weeks}
-                className={weeks === o.weeks ? 'active' : ''}
-                onClick={() => setWeeks(o.weeks)}
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Jatuh tempo berikutnya</CardTitle>
+          <CardDescription>
+            Milestone yang harus terjadi, dihitung dari tanggal plan dan forecast tiap item
+          </CardDescription>
+          <CardAction>
+            <Tabs value={weeks} onValueChange={setWeeks}>
+              <TabsList>
+                {LOOKAHEAD_OPTIONS.map(o => (
+                  <TabsTrigger key={o.weeks} value={o.weeks}>{o.label}</TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {lookahead.slice(0, 4).map(week => (
+              <div
+                key={week.label}
+                className={cn(
+                  'min-h-36 rounded-xl border p-3',
+                  week.isCurrent ? 'border-onsite/30 bg-onsite-bg/60' : 'bg-muted/40',
+                )}
               >
-                {o.label}
-              </button>
+                <div className="mb-2.5 flex items-baseline justify-between gap-2">
+                  <span className={cn(
+                    'text-[11px] font-bold uppercase tracking-wider',
+                    week.isCurrent ? 'text-onsite-fg' : 'text-muted-foreground',
+                  )}>
+                    {week.label}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-semibold text-muted-foreground tabular">
+                    {week.range}
+                  </span>
+                </div>
+
+                {week.events.length === 0 ? (
+                  <p className="px-0.5 py-2 text-[11px] italic text-muted-foreground">Tidak ada jadwal.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {week.events.slice(0, 6).map(ev => (
+                      <button
+                        key={`${ev.itemId}-${ev.kind}`}
+                        onClick={() => openById(ev.itemId)}
+                        className={cn(
+                          'block w-full rounded-lg border-l-[3px] bg-card px-2.5 py-2 text-left ring-1 ring-foreground/5 transition hover:ring-foreground/15',
+                          ev.overdue ? 'border-l-late bg-late-bg'
+                            : ev.kind === 'fat' ? 'border-l-onsite'
+                            : ev.kind === 'rts' ? 'border-l-rts'
+                            : 'border-l-ontrack',
+                        )}
+                      >
+                        <span className="mb-1 flex items-center gap-1.5">
+                          <span className={cn(
+                            'rounded px-1.5 py-px text-[9px] font-bold tracking-wide',
+                            ev.overdue ? 'bg-late/15 text-late-fg' : MS_ACCENT[ev.kind],
+                          )}>
+                            {ev.label}
+                          </span>
+                          <span className={cn(
+                            'ml-auto text-[9px] font-bold tabular',
+                            ev.overdue ? 'text-late-fg' : 'text-muted-foreground',
+                          )}>
+                            {ev.overdue ? 'LEWAT' : ev.day}
+                          </span>
+                        </span>
+                        <span className="block text-xs font-medium leading-snug">{ev.desc}</span>
+                        <span className="mt-0.5 block text-[10px] text-muted-foreground">{ev.vendor || '—'}</span>
+                      </button>
+                    ))}
+                    {week.events.length > 6 && (
+                      <p className="px-0.5 pt-1 text-[11px] italic text-muted-foreground">
+                        +{week.events.length - 6} lagi
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
-        </div>
 
-        <div className="week-grid">
-          {lookahead.slice(0, 4).map(week => (
-            <div className={`week-col${week.isCurrent ? ' now' : ''}`} key={week.label}>
-              <div className="week-hd">
-                <span className="week-label">{week.label}</span>
-                <span className="week-date">{week.range}</span>
-              </div>
-              {week.events.length === 0 ? (
-                <div className="week-empty">Tidak ada jadwal.</div>
-              ) : (
-                week.events.slice(0, 6).map(ev => (
-                  <button
-                    key={`${ev.itemId}-${ev.kind}`}
-                    className={`ev ${ev.overdue ? 'risk' : ev.kind}`}
-                    onClick={() => openById(ev.itemId)}
-                  >
-                    <span className="ev-top">
-                      <span className="ev-kind">{ev.label}</span>
-                      <span className="ev-day">{ev.overdue ? 'LEWAT' : ev.day}</span>
-                    </span>
-                    <span className="ev-name">{ev.desc}</span>
-                    <span className="ev-vendor">{ev.vendor || '—'}</span>
-                  </button>
-                ))
-              )}
-              {week.events.length > 6 && (
-                <div className="week-empty">+{week.events.length - 6} lagi</div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {weeks > 4 && (
-          <div className="card-note look-note">
-            Menampilkan 4 minggu pertama dari {weeks} minggu.{' '}
-            {lookahead.slice(4).reduce((s, w) => s + w.events.length, 0)} milestone lain jatuh tempo setelahnya.
-          </div>
-        )}
-      </div>
+          {weekCount > 4 && (
+            <p className="mt-4 text-xs text-muted-foreground">
+              Menampilkan 4 minggu pertama dari {weekCount} minggu.{' '}
+              {lookahead.slice(4).reduce((s, w) => s + w.events.length, 0)} milestone lain jatuh tempo setelahnya.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Anomali ── */}
-      <div className="card section-gap">
-        <div className="card-head">
-          <div className="card-title">Anomali terdeteksi</div>
-          <span className="card-count">{anomalies.length} temuan</span>
-        </div>
-        <div className="card-sub">Dihitung ulang setiap kali data berubah atau file Excel di-import</div>
-
-        {anomalies.length === 0 ? (
-          <div className="anom ok">
-            <div className="anom-ic">✅</div>
-            <div>
-              <div className="anom-name">Tidak ada anomali</div>
-              <div className="anom-why">Semua item punya jadwal yang wajar dan dokumen yang lengkap.</div>
-            </div>
-          </div>
-        ) : (
-          <div className="anom-list">
-            {topAnomalies.map((a, idx) => (
-              <AnomalyRow key={`${a.itemId}-${a.rule}-${idx}`} anomaly={a} item={byId.get(a.itemId)} onOpen={openById} />
-            ))}
-            {anomalies.length > topAnomalies.length && (
-              <div className="card-note">
-                +{anomalies.length - topAnomalies.length} temuan lain. Semuanya ikut tercetak di sheet
-                {' '}<b>ANOMALI</b> saat export Excel.
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Anomali terdeteksi</CardTitle>
+          <CardDescription>
+            Dihitung ulang setiap kali data berubah atau file Excel di-import
+          </CardDescription>
+          <CardAction>
+            <Badge variant="secondary" className="tabular">{anomalies.length} temuan</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {anomalies.length === 0 ? (
+            <div className="flex items-center gap-3 rounded-xl border border-ontrack/25 bg-ontrack-bg px-4 py-3.5">
+              <CheckCircle2 className="size-5 shrink-0 text-ontrack-fg" />
+              <div>
+                <p className="text-sm font-medium text-ontrack-fg">Tidak ada anomali</p>
+                <p className="text-xs text-ontrack-fg/80">
+                  Semua item punya jadwal yang wajar dan dokumen yang lengkap.
+                </p>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {topAnomalies.map((a, idx) => (
+                <AnomalyRow
+                  key={`${a.itemId}-${a.rule}-${idx}`}
+                  anomaly={a}
+                  item={byId.get(a.itemId)}
+                  onOpen={openById}
+                />
+              ))}
+              {anomalies.length > topAnomalies.length && (
+                <p className="pt-1 text-xs text-muted-foreground">
+                  +{anomalies.length - topAnomalies.length} temuan lain. Semuanya ikut tercetak di
+                  sheet <span className="font-medium text-foreground">ANOMALI</span> saat export Excel.
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* ── Vendor ── */}
-      <div className="card section-gap">
-        <div className="card-head">
-          <div className="card-title">Vendor perlu ditindaklanjuti</div>
-          <span className="card-count">{vendors.length} vendor</span>
-        </div>
-        <div className="card-sub">Diurutkan dari yang paling berdampak ke jadwal</div>
-
-        <div className="table-scroll">
-          <table className="vend-table">
-            <thead>
-              <tr>
-                <th style={{ minWidth: 180 }}>Vendor</th>
-                <th style={{ width: 60 }}>Item</th>
-                <th style={{ width: 120 }}>Readiness</th>
-                <th style={{ width: 110 }}>Slip rata²</th>
-                <th className="r" style={{ width: 110 }}>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {topVendors.map(v => {
-                const pct = Math.round(v.avgReadiness * 100);
-                const tone = pct < 50 ? 'low' : pct < 90 ? 'mid' : '';
-                return (
-                  <tr key={v.vendor}>
-                    <td>
-                      <div className="vend-name">{v.vendor}</div>
-                      <div className="vend-sub">{v.itemNames.slice(0, 3).join(' · ')}</div>
-                    </td>
-                    <td className="num">{v.items}</td>
-                    <td>
-                      <div className="readiness-cell">
-                        <span className="mini-bar"><i className={tone} style={{ width: `${pct}%` }} /></span>
-                        <span className="num">{pct}%</span>
-                      </div>
-                    </td>
-                    <td className={`num${v.avgSlipDays > 0 ? ' slip' : ''}`}>
-                      {v.avgSlipDays > 0 ? `+${v.avgSlipDays} hari` : 'tepat waktu'}
-                    </td>
-                    <td className="r">
-                      <span className={`badge b-${v.worstStatus}`}>
-                        <span className="bdot" />{STATUS_LABELS[v.worstStatus]}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+      <Card className="mt-4">
+        <CardHeader>
+          <CardTitle>Vendor perlu ditindaklanjuti</CardTitle>
+          <CardDescription>Diurutkan dari yang paling berdampak ke jadwal</CardDescription>
+          <CardAction>
+            <Badge variant="secondary" className="tabular">{vendors.length} vendor</Badge>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-44">Vendor</TableHead>
+                  <TableHead className="w-16">Item</TableHead>
+                  <TableHead className="w-32">Readiness</TableHead>
+                  <TableHead className="w-28">Slip rata²</TableHead>
+                  <TableHead className="w-28 text-right">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {topVendors.map(v => {
+                  const pct = Math.round(v.avgReadiness * 100);
+                  return (
+                    <TableRow key={v.vendor}>
+                      <TableCell>
+                        <p className="font-medium">{v.vendor}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {v.itemNames.slice(0, 3).join(' · ')}
+                        </p>
+                      </TableCell>
+                      <TableCell className="font-medium tabular">{v.items}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={cn(
+                                'h-full rounded-full',
+                                pct < 50 ? 'bg-late' : pct < 90 ? 'bg-atrisk' : 'bg-ontrack',
+                              )}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className="text-xs font-medium tabular">{pct}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className={cn('text-xs font-medium tabular', v.avgSlipDays > 0 && 'text-late-fg')}>
+                        {v.avgSlipDays > 0 ? `+${v.avgSlipDays} hari` : 'tepat waktu'}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <StatusBadge status={v.worstStatus} />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
 /* ─────────────── Sub-components ─────────────── */
 
-function DashboardHeader({
-  project, onImport, onExport, exporting, canExport,
-}: {
-  project: Project | null;
-  onImport: () => void;
-  onExport: () => void;
-  exporting: boolean;
-  canExport: boolean;
-}) {
+function Bar({ label, value, className }: { label: string; value: number; className: string }) {
   return (
-    <div className="page-header">
-      {project && (
-        <p className="page-eyebrow">
-          {[project.name, project.client, project.location].filter(Boolean).join(' · ')}
-          {project.revision ? <span className="rev-chip">rev.{project.revision}</span> : null}
-        </p>
-      )}
-      <div className="page-title-row">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-sub">
-            Ringkasan posisi sekarang terhadap rencana, dan apa yang jatuh tempo berikutnya.
-          </p>
-        </div>
-        <div className="actions">
-          <button className="btn btn-secondary" onClick={onImport}>↓ Import Excel</button>
-          <button className="btn btn-primary" onClick={onExport} disabled={!canExport || exporting}>
-            {exporting ? 'Menyiapkan…' : '↑ Export Excel'}
-          </button>
-        </div>
+    <div className="flex items-center gap-2.5">
+      <span className="w-9 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+        <div className={cn('h-full rounded-full', className)} style={{ width: `${value}%` }} />
       </div>
     </div>
+  );
+}
+
+function Legend({ swatch, label }: { swatch: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+      <span className={cn('h-[3px] w-3.5 rounded-full', swatch)} />
+      {label}
+    </span>
+  );
+}
+
+function Key({ swatch, label, n }: { swatch: string; label: string; n?: number }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={cn('size-[7px] rounded-[2px]', swatch)} />
+      {label}
+      {n !== undefined && <b className="font-bold text-foreground tabular">{n}</b>}
+    </span>
   );
 }
 
@@ -447,19 +581,42 @@ function AnomalyRow({
   item: ProcurementItem | undefined;
   onOpen: (id: string) => void;
 }) {
+  const Icon = ANOMALY_ICON[anomaly.rule] ?? TriangleAlert;
+  const crit = anomaly.severity === 'crit';
+
   return (
-    <div className={`anom ${anomaly.severity}`}>
-      <div className="anom-ic">{anomaly.icon}</div>
-      <div>
-        <div className="anom-name">
+    <div className={cn(
+      'flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3',
+      crit ? 'border-late/20 bg-late-bg' : 'border-atrisk/25 bg-atrisk-bg',
+    )}>
+      <span className={cn(
+        'flex size-8 shrink-0 items-center justify-center rounded-lg',
+        crit ? 'bg-late/15 text-late-fg' : 'bg-atrisk/20 text-atrisk-fg',
+      )}>
+        <Icon className="size-4" />
+      </span>
+
+      <div className="min-w-40 flex-1">
+        <p className="text-sm font-medium">
           {item?.desc ?? 'Item tidak ditemukan'}
-          {item?.vendor && <span className="vend">· {item.vendor}</span>}
-          {item?.poNo && <span className="vend">· {item.poNo}</span>}
-        </div>
-        <div className="anom-why">{anomaly.detail}</div>
+          {item?.vendor && <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {item.vendor}</span>}
+          {item?.poNo && <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {item.poNo}</span>}
+        </p>
+        <p className={cn('mt-0.5 text-xs', crit ? 'text-late-fg' : 'text-atrisk-fg')}>
+          {anomaly.detail}
+        </p>
       </div>
+
       {item && (
-        <button className="anom-act" onClick={() => onOpen(anomaly.itemId)}>Buka item</button>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="shrink-0 bg-background/70 hover:bg-background"
+          onClick={() => onOpen(anomaly.itemId)}
+        >
+          <CalendarClock className="size-3.5" />
+          Buka item
+        </Button>
       )}
     </div>
   );
