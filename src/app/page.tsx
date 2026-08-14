@@ -392,8 +392,6 @@ export default function ProcurementApp() {
                   items={projectItems}
                   onOpenItem={openDetail}
                   onImport={() => setImportOpen(true)}
-                  onExport={handleExport}
-                  exporting={exporting}
                 />
               )}
 

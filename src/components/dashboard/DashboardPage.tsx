@@ -2,7 +2,7 @@
 
 import { ViewTransition, useMemo, useState, useTransition } from 'react';
 import {
-  ArrowDownToLine, ArrowUpFromLine, CalendarClock, CheckCircle2, FileWarning,
+  ArrowDownToLine, CalendarClock, CheckCircle2, FileWarning,
   PackageSearch, Receipt, Ship, TriangleAlert,
 } from 'lucide-react';
 import type { Anomaly, ProcurementItem, Project } from '@/types';
@@ -31,8 +31,6 @@ interface DashboardPageProps {
   items: ProcurementItem[];
   onOpenItem: (item: ProcurementItem) => void;
   onImport: () => void;
-  onExport: () => void;
-  exporting: boolean;
 }
 
 const LOOKAHEAD_OPTIONS = [
@@ -57,7 +55,7 @@ const MS_ACCENT: Record<string, string> = {
 };
 
 export default function DashboardPage({
-  project, items, onOpenItem, onImport, onExport, exporting,
+  project, items, onOpenItem, onImport,
 }: DashboardPageProps) {
   const [weeks, setWeeks] = useState('4');
   /** Switching the horizon runs in a transition so the grid crossfades. */
@@ -93,25 +91,11 @@ export default function DashboardPage({
   const behind       = deviation.deviation < 0;
 
   const header = (
-    <div className="mb-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-          {project?.revision ? (
-            <Badge variant="outline" className="tabular">rev.{project.revision}</Badge>
-          ) : null}
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <Button variant="outline" onClick={onImport}>
-            <ArrowDownToLine className="size-4" />
-            Import Excel
-          </Button>
-          <Button onClick={onExport} disabled={!items.length || exporting}>
-            <ArrowUpFromLine className="size-4" />
-            {exporting ? 'Preparing…' : 'Export Excel'}
-          </Button>
-        </div>
-      </div>
+    <div className="mb-6 flex items-center gap-3">
+      <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+      {project?.revision ? (
+        <Badge variant="outline" className="tabular">rev.{project.revision}</Badge>
+      ) : null}
     </div>
   );
 
