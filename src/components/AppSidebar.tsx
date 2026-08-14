@@ -1,6 +1,6 @@
 'use client';
 
-import { FolderKanban, LayoutDashboard, ListChecks } from 'lucide-react';
+import { Folder, LayoutDashboard, ListChecks } from 'lucide-react';
 import type { PageName } from '@/types';
 import BrandLogo from './BrandLogo';
 import {
@@ -17,7 +17,7 @@ interface AppSidebarProps {
 const NAV = [
   { page: 'dashboard' as const, label: 'Dashboard', icon: LayoutDashboard },
   { page: 'overview'  as const, label: 'Overview',  icon: ListChecks },
-  { page: 'projects'  as const, label: 'Projects',  icon: FolderKanban },
+  { page: 'projects'  as const, label: 'Projects',  icon: Folder },
 ];
 
 export default function AppSidebar({ page, attention, onNavigate }: AppSidebarProps) {
