@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { ViewTransition, useMemo, useState, useTransition } from 'react';
 import {
   ArrowDownToLine, ArrowUpFromLine, CalendarClock, CheckCircle2, FileWarning,
   PackageSearch, Receipt, Ship, TriangleAlert,
@@ -13,6 +13,7 @@ import {
 import SCurveChart from './SCurveChart';
 import StatTile from './StatTile';
 import StatusBadge from './Badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,9 +36,9 @@ interface DashboardPageProps {
 }
 
 const LOOKAHEAD_OPTIONS = [
-  { weeks: '4',  label: '4 minggu' },
-  { weeks: '8',  label: '8 minggu' },
-  { weeks: '13', label: 'Kuartal' },
+  { weeks: '4',  label: '4 weeks' },
+  { weeks: '8',  label: '8 weeks' },
+  { weeks: '13', label: 'Quarter' },
 ];
 
 /** Icon per anomaly rule, so the list scans without reading every line. */
@@ -59,6 +60,8 @@ export default function DashboardPage({
   project, items, onOpenItem, onImport, onExport, exporting,
 }: DashboardPageProps) {
   const [weeks, setWeeks] = useState('4');
+  /** Switching the horizon runs in a transition so the grid crossfades. */
+  const [, startLookahead] = useTransition();
   const weekCount = Number(weeks);
 
   const deviation   = useMemo(() => computeDeviation(items, project), [items, project]);
@@ -103,7 +106,7 @@ export default function DashboardPage({
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Ringkasan posisi sekarang terhadap rencana, dan apa yang jatuh tempo berikutnya.
+            Where the project stands against plan, and what falls due next.
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -113,7 +116,7 @@ export default function DashboardPage({
           </Button>
           <Button onClick={onExport} disabled={!items.length || exporting}>
             <ArrowUpFromLine className="size-4" />
-            {exporting ? 'Menyiapkan…' : 'Export Excel'}
+            {exporting ? 'Preparing…' : 'Export Excel'}
           </Button>
         </div>
       </div>
@@ -122,14 +125,14 @@ export default function DashboardPage({
 
   if (!items.length) {
     return (
-      <div className="animate-page-in">
+      <div>
         {header}
         <Card className="py-16">
           <CardContent className="flex flex-col items-center gap-3 text-center">
             <PackageSearch className="size-9 text-muted-foreground/50" />
-            <p className="font-medium">Belum ada item untuk dirangkum.</p>
+            <p className="font-medium">Nothing to summarise yet.</p>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Import file Excel yang sudah ada, atau tambahkan item dari halaman Overview.
+              Import an existing Excel file, or add items from the Overview page.
             </p>
             <Button className="mt-2" onClick={onImport}>
               <ArrowDownToLine className="size-4" />
@@ -142,7 +145,7 @@ export default function DashboardPage({
   }
 
   return (
-    <div className="animate-page-in">
+    <div>
       {header}
 
       {/* ── Deviasi + kurva-S ── */}
@@ -153,7 +156,7 @@ export default function DashboardPage({
               'text-[11px] font-semibold uppercase tracking-wider',
               behind ? 'text-atrisk-fg' : 'text-ontrack-fg',
             )}>
-              Deviasi terhadap rencana
+              Deviation against plan
             </p>
 
             <p className={cn(
@@ -168,27 +171,27 @@ export default function DashboardPage({
             <p className="mt-2.5 text-sm text-muted-foreground">
               {behind ? (
                 <>
-                  Realisasi tertinggal dari kurva rencana
+                  Actual is behind the planned curve
                   {deviation.slipDays > 0 && (
-                    <> — setara <span className="font-medium text-foreground">±{deviation.slipDays} hari</span> keterlambatan</>
+                    <> — roughly <span className="font-medium text-foreground">{deviation.slipDays} days</span> behind</>
                   )}.
                 </>
               ) : deviation.deviation > 0
-                ? 'Realisasi mendahului rencana. Jadwal aman.'
-                : 'Realisasi tepat di garis rencana.'}
+                ? 'Actual is ahead of plan. Schedule is healthy.'
+                : 'Actual sits exactly on the planned curve.'}
             </p>
 
             <Separator className="my-5" />
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Rencana</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Planned</p>
                 <p className="mt-1 text-2xl font-semibold tracking-tight text-muted-foreground tabular">
                   {deviation.planPct}%
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Aktual</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Actual</p>
                 <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{deviation.actualPct}%</p>
               </div>
             </div>
@@ -200,11 +203,11 @@ export default function DashboardPage({
 
             {project?.handover && (
               <p className="mt-auto pt-5 text-xs text-muted-foreground">
-                Target handover <span className="font-medium text-foreground">{fmtDate(project.handover)}</span>
+                Handover target <span className="font-medium text-foreground">{fmtDate(project.handover)}</span>
                 {daysToHandover !== null && (
                   daysToHandover >= 0
-                    ? ` · sisa ${daysToHandover} hari`
-                    : ` · lewat ${Math.abs(daysToHandover)} hari`
+                    ? ` · ${daysToHandover} days left`
+                    : ` · ${Math.abs(daysToHandover)} days overdue`
                 )}
               </p>
             )}
@@ -213,14 +216,14 @@ export default function DashboardPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Kurva-S · Rencana vs Realisasi</CardTitle>
+            <CardTitle>S-Curve · Plan vs Actual</CardTitle>
             <CardDescription>
-              Progres kumulatif seluruh item, dibobot rata dari tanggal milestone
+              Cumulative progress across all items, evenly weighted from milestone dates
             </CardDescription>
             <CardAction className="hidden gap-4 sm:flex">
-              <Legend swatch="bg-muted-foreground" label="Rencana" />
-              <Legend swatch="bg-onsite" label="Realisasi" />
-              <Legend swatch="bg-rts" label="Proyeksi" />
+              <Legend swatch="bg-muted-foreground" label="Plan" />
+              <Legend swatch="bg-onsite" label="Actual" />
+              <Legend swatch="bg-rts" label="Forecast" />
             </CardAction>
           </CardHeader>
           <CardContent>
@@ -232,21 +235,21 @@ export default function DashboardPage({
       {/* ── Tiles ── */}
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <StatTile
-          label="Total Item" value={items.length}
-          sub={`${disciplines.length} disiplin · ${uniqueVendors} vendor`} variant="accent"
+          label="Total items" value={items.length}
+          sub={`${disciplines.length} disciplines · ${uniqueVendors} vendors`} variant="accent"
         />
         <StatTile
           label="On Site" value={counts.onsite}
-          sub={`${Math.round((counts.onsite / items.length) * 100)}% terkirim`}
+          sub={`${Math.round((counts.onsite / items.length) * 100)}% delivered`}
           variant={counts.onsite > 0 ? 'good' : 'default'}
         />
-        <StatTile label="On Track" value={counts.ontrack} sub="Sesuai jadwal" />
+        <StatTile label="On Track" value={counts.ontrack} sub="On schedule" />
         <StatTile
-          label="At Risk" value={counts.atrisk} sub="FAT ≤ 14 hari"
+          label="At Risk" value={counts.atrisk} sub="FAT within 14 days"
           variant={counts.atrisk > 0 ? 'warn' : 'default'}
         />
         <StatTile
-          label="Late" value={counts.late} sub="Lewat tempo"
+          label="Late" value={counts.late} sub="Overdue"
           variant={counts.late > 0 ? 'crit' : 'default'}
         />
       </div>
@@ -255,9 +258,9 @@ export default function DashboardPage({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_minmax(0,1fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Posisi milestone</CardTitle>
+            <CardTitle>Milestone position</CardTitle>
             <CardDescription>
-              Berapa item sudah melewati tiap tahap, dari {items.length} item
+              How many items have cleared each stage, out of {items.length}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -282,11 +285,11 @@ export default function DashboardPage({
                     <div className="bg-late"    style={{ width: `${pct(ms.overdue)}%` }} />
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-                    <Key swatch="bg-ontrack" label="Selesai" n={ms.done} />
-                    <Key swatch="bg-atrisk" label="Terjadwal" n={ms.scheduled} />
-                    <Key swatch="bg-late" label="Lewat tempo" n={ms.overdue} />
+                    <Key swatch="bg-ontrack" label="Done" n={ms.done} />
+                    <Key swatch="bg-atrisk" label="Scheduled" n={ms.scheduled} />
+                    <Key swatch="bg-late" label="Overdue" n={ms.overdue} />
                     {ms.unplanned > 0 && (
-                      <Key swatch="bg-muted-foreground/40" label="Belum dijadwalkan" n={ms.unplanned} />
+                      <Key swatch="bg-muted-foreground/40" label="Not scheduled" n={ms.unplanned} />
                     )}
                   </div>
                 </div>
@@ -297,8 +300,8 @@ export default function DashboardPage({
 
         <Card>
           <CardHeader>
-            <CardTitle>Sebaran per disiplin</CardTitle>
-            <CardDescription>Komposisi status tiap disiplin</CardDescription>
+            <CardTitle>Breakdown by discipline</CardTitle>
+            <CardDescription>Status mix within each discipline</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -342,12 +345,12 @@ export default function DashboardPage({
       {/* ── Lookahead ── */}
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle>Jatuh tempo berikutnya</CardTitle>
+          <CardTitle>Falling due next</CardTitle>
           <CardDescription>
-            Milestone yang harus terjadi, dihitung dari tanggal plan dan forecast tiap item
+            Milestones still ahead, read from each item’s plan and forecast dates
           </CardDescription>
           <CardAction>
-            <Tabs value={weeks} onValueChange={setWeeks}>
+            <Tabs value={weeks} onValueChange={v => startLookahead(() => setWeeks(v))}>
               <TabsList>
                 {LOOKAHEAD_OPTIONS.map(o => (
                   <TabsTrigger key={o.weeks} value={o.weeks}>{o.label}</TabsTrigger>
@@ -357,12 +360,15 @@ export default function DashboardPage({
           </CardAction>
         </CardHeader>
         <CardContent>
+          <ViewTransition key={weeks} name="lookahead" share="auto" enter="auto" exit="auto" default="none">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {lookahead.slice(0, 4).map(week => (
+            {lookahead.slice(0, 4).map((week, wi) => (
               <div
                 key={week.label}
+                style={{ animationDelay: `${wi * 45}ms` }}
                 className={cn(
                   'min-h-36 rounded-xl border p-3',
+                  'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
                   week.isCurrent ? 'border-onsite/30 bg-onsite-bg/60' : 'bg-muted/40',
                 )}
               >
@@ -379,7 +385,7 @@ export default function DashboardPage({
                 </div>
 
                 {week.events.length === 0 ? (
-                  <p className="px-0.5 py-2 text-[11px] italic text-muted-foreground">Tidak ada jadwal.</p>
+                  <p className="px-0.5 py-2 text-[11px] italic text-muted-foreground">Nothing scheduled.</p>
                 ) : (
                   <div className="space-y-1.5">
                     {week.events.slice(0, 6).map(ev => (
@@ -387,7 +393,9 @@ export default function DashboardPage({
                         key={`${ev.itemId}-${ev.kind}`}
                         onClick={() => openById(ev.itemId)}
                         className={cn(
-                          'block w-full rounded-lg border-l-[3px] bg-card px-2.5 py-2 text-left ring-1 ring-foreground/5 transition hover:ring-foreground/15',
+                          'block w-full rounded-lg border-l-[3px] bg-card px-2.5 py-2 text-left ring-1 ring-foreground/5',
+                          'transition-all duration-200 hover:-translate-y-px hover:shadow-sm hover:ring-foreground/20',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                           ev.overdue ? 'border-l-late bg-late-bg'
                             : ev.kind === 'fat' ? 'border-l-onsite'
                             : ev.kind === 'rts' ? 'border-l-rts'
@@ -405,7 +413,7 @@ export default function DashboardPage({
                             'ml-auto text-[9px] font-bold tabular',
                             ev.overdue ? 'text-late-fg' : 'text-muted-foreground',
                           )}>
-                            {ev.overdue ? 'LEWAT' : ev.day}
+                            {ev.overdue ? 'OVERDUE' : ev.day}
                           </span>
                         </span>
                         <span className="block text-xs font-medium leading-snug">{ev.desc}</span>
@@ -414,7 +422,7 @@ export default function DashboardPage({
                     ))}
                     {week.events.length > 6 && (
                       <p className="px-0.5 pt-1 text-[11px] italic text-muted-foreground">
-                        +{week.events.length - 6} lagi
+                        +{week.events.length - 6} more
                       </p>
                     )}
                   </div>
@@ -422,11 +430,12 @@ export default function DashboardPage({
               </div>
             ))}
           </div>
+          </ViewTransition>
 
           {weekCount > 4 && (
             <p className="mt-4 text-xs text-muted-foreground">
-              Menampilkan 4 minggu pertama dari {weekCount} minggu.{' '}
-              {lookahead.slice(4).reduce((s, w) => s + w.events.length, 0)} milestone lain jatuh tempo setelahnya.
+              Showing the first 4 of {weekCount} weeks.{' '}
+              {lookahead.slice(4).reduce((s, w) => s + w.events.length, 0)} further milestones fall due after that.
             </p>
           )}
         </CardContent>
@@ -435,25 +444,23 @@ export default function DashboardPage({
       {/* ── Anomali ── */}
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle>Anomali terdeteksi</CardTitle>
+          <CardTitle>Detected anomalies</CardTitle>
           <CardDescription>
-            Dihitung ulang setiap kali data berubah atau file Excel di-import
+            Recalculated whenever data changes or an Excel file is imported
           </CardDescription>
           <CardAction>
-            <Badge variant="secondary" className="tabular">{anomalies.length} temuan</Badge>
+            <Badge variant="secondary" className="tabular">{anomalies.length} findings</Badge>
           </CardAction>
         </CardHeader>
         <CardContent>
           {anomalies.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl border border-ontrack/25 bg-ontrack-bg px-4 py-3.5">
-              <CheckCircle2 className="size-5 shrink-0 text-ontrack-fg" />
-              <div>
-                <p className="text-sm font-medium text-ontrack-fg">Tidak ada anomali</p>
-                <p className="text-xs text-ontrack-fg/80">
-                  Semua item punya jadwal yang wajar dan dokumen yang lengkap.
-                </p>
-              </div>
-            </div>
+            <Alert className="border-ontrack/25 bg-ontrack-bg text-ontrack-fg">
+              <CheckCircle2 />
+              <AlertTitle>No anomalies</AlertTitle>
+              <AlertDescription className="text-ontrack-fg/80">
+                Every item has a sensible schedule and complete documents.
+              </AlertDescription>
+            </Alert>
           ) : (
             <div className="space-y-2">
               {topAnomalies.map((a, idx) => (
@@ -461,13 +468,14 @@ export default function DashboardPage({
                   key={`${a.itemId}-${a.rule}-${idx}`}
                   anomaly={a}
                   item={byId.get(a.itemId)}
+                  index={idx}
                   onOpen={openById}
                 />
               ))}
               {anomalies.length > topAnomalies.length && (
                 <p className="pt-1 text-xs text-muted-foreground">
-                  +{anomalies.length - topAnomalies.length} temuan lain. Semuanya ikut tercetak di
-                  sheet <span className="font-medium text-foreground">ANOMALI</span> saat export Excel.
+                  +{anomalies.length - topAnomalies.length} more findings. All of them are written to
+                  the <span className="font-medium text-foreground">ANOMALIES</span> sheet on export.
                 </p>
               )}
             </div>
@@ -478,10 +486,10 @@ export default function DashboardPage({
       {/* ── Vendor ── */}
       <Card className="mt-4">
         <CardHeader>
-          <CardTitle>Vendor perlu ditindaklanjuti</CardTitle>
-          <CardDescription>Diurutkan dari yang paling berdampak ke jadwal</CardDescription>
+          <CardTitle>Vendors needing follow-up</CardTitle>
+          <CardDescription>Ordered by impact on the schedule</CardDescription>
           <CardAction>
-            <Badge variant="secondary" className="tabular">{vendors.length} vendor</Badge>
+            <Badge variant="secondary" className="tabular">{vendors.length} vendors</Badge>
           </CardAction>
         </CardHeader>
         <CardContent>
@@ -492,15 +500,19 @@ export default function DashboardPage({
                   <TableHead className="min-w-44">Vendor</TableHead>
                   <TableHead className="w-16">Item</TableHead>
                   <TableHead className="w-32">Readiness</TableHead>
-                  <TableHead className="w-28">Slip rata²</TableHead>
+                  <TableHead className="w-28">Avg. slip</TableHead>
                   <TableHead className="w-28 text-right">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {topVendors.map(v => {
+                {topVendors.map((v, vi) => {
                   const pct = Math.round(v.avgReadiness * 100);
                   return (
-                    <TableRow key={v.vendor}>
+                    <TableRow
+                      key={v.vendor}
+                      style={{ animationDelay: `${vi * 40}ms` }}
+                      className="motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-backwards"
+                    >
                       <TableCell>
                         <p className="font-medium">{v.vendor}</p>
                         <p className="truncate text-xs text-muted-foreground">
@@ -513,7 +525,7 @@ export default function DashboardPage({
                           <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
                             <div
                               className={cn(
-                                'h-full rounded-full',
+                                'h-full rounded-full transition-[width] duration-500',
                                 pct < 50 ? 'bg-late' : pct < 90 ? 'bg-atrisk' : 'bg-ontrack',
                               )}
                               style={{ width: `${pct}%` }}
@@ -523,7 +535,7 @@ export default function DashboardPage({
                         </div>
                       </TableCell>
                       <TableCell className={cn('text-xs font-medium tabular', v.avgSlipDays > 0 && 'text-late-fg')}>
-                        {v.avgSlipDays > 0 ? `+${v.avgSlipDays} hari` : 'tepat waktu'}
+                        {v.avgSlipDays > 0 ? `+${v.avgSlipDays} days` : 'on time'}
                       </TableCell>
                       <TableCell className="text-right">
                         <StatusBadge status={v.worstStatus} />
@@ -575,49 +587,50 @@ function Key({ swatch, label, n }: { swatch: string; label: string; n?: number }
 }
 
 function AnomalyRow({
-  anomaly, item, onOpen,
+  anomaly, item, index, onOpen,
 }: {
   anomaly: Anomaly;
   item: ProcurementItem | undefined;
+  index: number;
   onOpen: (id: string) => void;
 }) {
   const Icon = ANOMALY_ICON[anomaly.rule] ?? TriangleAlert;
   const crit = anomaly.severity === 'crit';
 
   return (
-    <div className={cn(
-      'flex flex-wrap items-center gap-3 rounded-xl border px-3.5 py-3',
-      crit ? 'border-late/20 bg-late-bg' : 'border-atrisk/25 bg-atrisk-bg',
-    )}>
-      <span className={cn(
-        'flex size-8 shrink-0 items-center justify-center rounded-lg',
-        crit ? 'bg-late/15 text-late-fg' : 'bg-atrisk/20 text-atrisk-fg',
-      )}>
-        <Icon className="size-4" />
-      </span>
-
-      <div className="min-w-40 flex-1">
-        <p className="text-sm font-medium">
-          {item?.desc ?? 'Item tidak ditemukan'}
-          {item?.vendor && <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {item.vendor}</span>}
-          {item?.poNo && <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {item.poNo}</span>}
-        </p>
-        <p className={cn('mt-0.5 text-xs', crit ? 'text-late-fg' : 'text-atrisk-fg')}>
-          {anomaly.detail}
-        </p>
-      </div>
-
+    <Alert
+      style={{ animationDelay: `${index * 40}ms` }}
+      className={cn(
+        'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
+        crit
+          ? 'border-late/20 bg-late-bg text-late-fg'
+          : 'border-atrisk/25 bg-atrisk-bg text-atrisk-fg',
+      )}
+    >
+      <Icon />
+      <AlertTitle className="text-foreground">
+        {item?.desc ?? 'Item not found'}
+        {item?.vendor && (
+          <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {item.vendor}</span>
+        )}
+        {item?.poNo && (
+          <span className="ml-1.5 text-xs font-normal text-muted-foreground">· {item.poNo}</span>
+        )}
+      </AlertTitle>
+      <AlertDescription className={crit ? 'text-late-fg' : 'text-atrisk-fg'}>
+        {anomaly.detail}
+      </AlertDescription>
       {item && (
         <Button
           size="sm"
           variant="ghost"
-          className="shrink-0 bg-background/70 hover:bg-background"
+          className="col-start-2 row-start-3 mt-2 justify-self-start bg-background/70 transition-colors hover:bg-background"
           onClick={() => onOpen(anomaly.itemId)}
         >
           <CalendarClock className="size-3.5" />
-          Buka item
+          Open item
         </Button>
       )}
-    </div>
+    </Alert>
   );
 }

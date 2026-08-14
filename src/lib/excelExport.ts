@@ -83,12 +83,12 @@ function writeTitle(
 
   sheet.mergeCells(3, 1, 3, span);
   const r = sheet.getCell(3, 1);
-  r.value = `rev.${revision}  ·  dicetak ${fmtDate(today())}`;
+  r.value = `rev.${revision}  ·  printed ${fmtDate(today())}`;
   r.font = { size: 9, bold: true, color: { argb: INK_SOFT }, name: 'Calibri' };
   r.alignment = RIGHT;
 }
 
-/* ─────────────── Sheet 1 · Ringkasan ─────────────── */
+/* ─────────────── Sheet 1 · Summary ─────────────── */
 
 function buildSummary(
   wb: ExcelJS.Workbook,
@@ -97,7 +97,7 @@ function buildSummary(
   anomalies: Anomaly[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('RINGKASAN', {
+  const sheet = wb.addWorksheet('SUMMARY', {
     properties: { defaultRowHeight: 16 },
     pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
@@ -106,7 +106,7 @@ function buildSummary(
     { width: 14 }, { width: 14 }, { width: 22 },
   ];
 
-  writeTitle(sheet, 7, 'RINGKASAN PROCUREMENT', project?.name ?? 'Semua project', revision);
+  writeTitle(sheet, 7, 'PROCUREMENT SUMMARY', project?.name ?? 'All projects', revision);
 
   let r = 5;
 
@@ -135,36 +135,36 @@ function buildSummary(
     r += 1;
   };
 
-  sectionHead('DATA PROJECT');
-  kv('Nama project', project?.name ?? '—', true);
+  sectionHead('PROJECT DETAILS');
+  kv('Project name', project?.name ?? '—', true);
   kv('Client', project?.client ?? '—');
-  kv('Lokasi', project?.location ?? '—');
+  kv('Location', project?.location ?? '—');
   kv('PIC', project?.pic ?? '—');
-  kv('No. kontrak', project?.contractNo ?? '—');
-  kv('Target handover', project?.handover ? fmtDate(project.handover) : '—');
+  kv('Contract no.', project?.contractNo ?? '—');
+  kv('Handover target', project?.handover ? fmtDate(project.handover) : '—');
 
   const dev = computeDeviation(items, project);
 
-  sectionHead('POSISI TERHADAP RENCANA');
-  kv('Progres rencana', `${dev.planPct}%`);
-  kv('Progres aktual', `${dev.actualPct}%`, true);
+  sectionHead('POSITION AGAINST PLAN');
+  kv('Planned progress', `${dev.planPct}%`);
+  kv('Actual progress', `${dev.actualPct}%`, true);
   const devRow = r;
-  kv('Deviasi', `${dev.deviation > 0 ? '+' : ''}${dev.deviation}%`, true);
+  kv('Deviation', `${dev.deviation > 0 ? '+' : ''}${dev.deviation}%`, true);
   const devCell = sheet.getCell(devRow, 3);
   devCell.font = {
     size: 10, bold: true, name: 'Calibri',
     color: { argb: dev.deviation < 0 ? 'FFC73E3A' : 'FF1E7A33' },
   };
-  if (dev.slipDays > 0) kv('Perkiraan keterlambatan', `${dev.slipDays} hari`);
+  if (dev.slipDays > 0) kv('Estimated delay', `${dev.slipDays} days`);
 
-  sectionHead('STATUS ITEM');
+  sectionHead('ITEM STATUS');
   const statusCounts = (Object.keys(STATUS_LABELS) as ItemStatus[]).map(s => ({
     status: s,
     label: STATUS_LABELS[s],
     n: items.filter(i => i.status === s).length,
   }));
   const statusHeadRow = r;
-  ['Status', 'Jumlah', 'Porsi'].forEach((h, i) => {
+  ['Status', 'Count', 'Share'].forEach((h, i) => {
     const c = sheet.getCell(statusHeadRow, 2 + i);
     c.value = h;
   });
@@ -202,9 +202,9 @@ function buildSummary(
   totalN.border = thinBorder();
   r += 1;
 
-  sectionHead('POSISI MILESTONE');
+  sectionHead('MILESTONE POSITION');
   const msHeadRow = r;
-  ['Milestone', 'Selesai', 'Terjadwal', 'Lewat tempo', 'Belum dijadwalkan'].forEach((h, i) => {
+  ['Milestone', 'Done', 'Scheduled', 'Overdue', 'Not scheduled'].forEach((h, i) => {
     sheet.getCell(msHeadRow, 2 + i).value = h;
   });
   styleHeaderRow(sheet.getRow(msHeadRow), 20);
@@ -225,9 +225,9 @@ function buildSummary(
     r++;
   }
 
-  sectionHead('SEBARAN PER DISIPLIN');
+  sectionHead('BREAKDOWN BY DISCIPLINE');
   const discHeadRow = r;
-  ['Disiplin', 'Total', 'On Site', 'On Track', 'At Risk', 'Late'].forEach((h, i) => {
+  ['Discipline', 'Total', 'On Site', 'On Track', 'At Risk', 'Late'].forEach((h, i) => {
     sheet.getCell(discHeadRow, 2 + i).value = h;
   });
   styleHeaderRow(sheet.getRow(discHeadRow), 20);
@@ -245,10 +245,10 @@ function buildSummary(
   }
 
   if (anomalies.length) {
-    sectionHead('ANOMALI TERDETEKSI');
+    sectionHead('DETECTED ANOMALIES');
     sheet.mergeCells(r, 2, r, 7);
     const note = sheet.getCell(r, 2);
-    note.value = `${anomalies.length} temuan — rinciannya ada di sheet ANOMALI.`;
+    note.value = `${anomalies.length} findings — see the ANOMALIES sheet for detail.`;
     note.font = { size: 10, italic: true, color: { argb: STATUS_INK.late }, name: 'Calibri' };
     r++;
   }
@@ -293,7 +293,7 @@ function fatStatusText(item: ProcurementItem): string {
   const due = item.fat.forecast || item.fat.plan;
   if (!due) return item.fat.note || 'TBA';
   const overdue = due < today();
-  const base = overdue ? 'Estimated — lewat tempo' : 'Estimated';
+  const base = overdue ? 'Estimated — overdue' : 'Estimated';
   return item.fat.note ? `${base} · ${item.fat.note}` : base;
 }
 
@@ -314,8 +314,8 @@ function buildMonitoring(
 
   writeTitle(
     sheet, MONITORING_COLUMNS.length,
-    'STATUS MONITORING PROCUREMENT',
-    [project?.name, project?.client].filter(Boolean).join('  ·  ') || 'Semua project',
+    'PROCUREMENT MONITORING STATUS',
+    [project?.name, project?.client].filter(Boolean).join('  ·  ') || 'All projects',
     revision,
   );
 
@@ -374,7 +374,7 @@ function buildMonitoring(
     if (!groupItems.length) {
       sheet.mergeCells(r, 1, r, MONITORING_COLUMNS.length);
       const empty = sheet.getCell(r, 1);
-      empty.value = 'Belum ada item.';
+      empty.value = 'No items yet.';
       empty.font = { size: 9, italic: true, color: { argb: INK_SOFT }, name: 'Calibri' };
       empty.alignment = CENTER;
       empty.border = thinBorder();
@@ -385,7 +385,7 @@ function buildMonitoring(
   /* Totals strip. */
   const totalRow = sheet.getRow(r);
   totalRow.getCell(1).value = '';
-  totalRow.getCell(2).value = `TOTAL ${items.length} ITEM`;
+  totalRow.getCell(2).value = `TOTAL ${items.length} ITEMS`;
   const progIdx = MONITORING_COLUMNS.findIndex(c => c.header === 'PROGRESS') + 1;
   totalRow.getCell(progIdx).value = computeOverallProgress(items) / 100;
   totalRow.getCell(progIdx).numFmt = '0%';
@@ -409,7 +409,7 @@ function buildMilestones(
   items: ProcurementItem[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('MILESTONE', {
+  const sheet = wb.addWorksheet('MILESTONES', {
     views: [{ state: 'frozen', xSplit: 1, ySplit: 6 }],
     pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
@@ -417,7 +417,7 @@ function buildMilestones(
   const widths = [30, 20, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 24];
   sheet.columns = widths.map(w => ({ width: w }));
 
-  writeTitle(sheet, widths.length, 'JADWAL MILESTONE', 'FAT → RTS → MOS · rencana, forecast, aktual', revision);
+  writeTitle(sheet, widths.length, 'MILESTONE SCHEDULE', 'FAT → RTS → MOS · plan, forecast, actual', revision);
 
   /* Two-tier header: milestone group over plan/forecast/actual. */
   const groupRow = sheet.getRow(5);
@@ -427,7 +427,7 @@ function buildMilestones(
   sheet.mergeCells(5, 6, 5, 8); groupRow.getCell(6).value = 'RTS — READY TO SHIP';
   sheet.mergeCells(5, 9, 5, 11); groupRow.getCell(9).value = 'MOS — MATERIAL ON SITE';
   sheet.mergeCells(5, 12, 6, 12); groupRow.getCell(12).value = 'PROGRESS';
-  sheet.mergeCells(5, 13, 6, 13); groupRow.getCell(13).value = 'CATATAN MILESTONE';
+  sheet.mergeCells(5, 13, 6, 13); groupRow.getCell(13).value = 'MILESTONE NOTES';
   styleHeaderRow(groupRow, 22);
 
   const subRow = sheet.getRow(6);
@@ -507,17 +507,17 @@ function buildVendors(
   items: ProcurementItem[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('VENDOR', {
+  const sheet = wb.addWorksheet('VENDORS', {
     views: [{ state: 'frozen', ySplit: 5 }],
     pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
   const widths = [30, 8, 14, 14, 14, 42];
   sheet.columns = widths.map(w => ({ width: w }));
 
-  writeTitle(sheet, widths.length, 'REKAP VENDOR', 'Diurutkan dari yang paling berdampak ke jadwal', revision);
+  writeTitle(sheet, widths.length, 'VENDOR SUMMARY', 'Ordered by impact on the schedule', revision);
 
   const head = sheet.getRow(5);
-  ['VENDOR', 'ITEM', 'READINESS RATA²', 'SLIP RATA² (HARI)', 'STATUS TERBURUK', 'ITEM YANG DIPEGANG']
+  ['VENDOR', 'ITEMS', 'AVG. READINESS', 'AVG. SLIP (DAYS)', 'WORST STATUS', 'ITEMS HELD']
     .forEach((h, i) => { head.getCell(i + 1).value = h; });
   styleHeaderRow(head, 28);
 
@@ -566,24 +566,24 @@ function buildAnomalies(
   anomalies: Anomaly[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('ANOMALI', {
+  const sheet = wb.addWorksheet('ANOMALIES', {
     views: [{ state: 'frozen', ySplit: 5 }],
     pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
   const widths = [11, 30, 24, 16, 22, 56];
   sheet.columns = widths.map(w => ({ width: w }));
 
-  writeTitle(sheet, widths.length, 'ANOMALI TERDETEKSI', 'Dihitung otomatis dari tanggal milestone, readiness dokumen dan status PO', revision);
+  writeTitle(sheet, widths.length, 'DETECTED ANOMALIES', 'Derived automatically from milestone dates, document readiness and PO status', revision);
 
   const head = sheet.getRow(5);
-  ['TINGKAT', 'EQUIPMENT / MATERIAL', 'VENDOR', 'PO NO', 'TEMUAN', 'RINCIAN']
+  ['SEVERITY', 'EQUIPMENT / MATERIAL', 'VENDOR', 'PO NO', 'FINDING', 'DETAIL']
     .forEach((h, i) => { head.getCell(i + 1).value = h; });
   styleHeaderRow(head, 24);
 
   if (!anomalies.length) {
     sheet.mergeCells(6, 1, 6, widths.length);
     const c = sheet.getCell(6, 1);
-    c.value = 'Tidak ada anomali terdeteksi. Semua item sesuai jadwal.';
+    c.value = 'No anomalies detected. Every item is on schedule.';
     c.font = { size: 10, bold: true, name: 'Calibri', color: { argb: STATUS_INK.ontrack } };
     fill(c, STATUS_FILL.ontrack);
     c.alignment = CENTER;
@@ -597,7 +597,7 @@ function buildAnomalies(
   for (const a of anomalies) {
     const item = byId.get(a.itemId);
     const row = sheet.getRow(r);
-    row.getCell(1).value = a.severity === 'crit' ? 'KRITIS' : 'PERHATIAN';
+    row.getCell(1).value = a.severity === 'crit' ? 'CRITICAL' : 'ATTENTION';
     row.getCell(2).value = item?.desc ?? '—';
     row.getCell(3).value = item?.vendor ?? '—';
     row.getCell(4).value = item?.poNo || '—';
@@ -657,7 +657,7 @@ export function buildWorkbook(
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Figtries Procurement';
   wb.created = new Date();
-  wb.title = `Procurement Monitoring — ${project?.name ?? 'Semua project'}`;
+  wb.title = `Procurement Monitoring — ${project?.name ?? 'All projects'}`;
   wb.category = EXPORT_MARKER;
 
   buildSummary(wb, project, items, anomalies, revision);

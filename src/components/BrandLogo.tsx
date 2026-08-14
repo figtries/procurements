@@ -8,7 +8,8 @@ export default function BrandLogo() {
         alt="Figtries"
         width={36}
         height={36}
-        className="h-9 w-auto shrink-0 object-contain"
+        style={{ width: 'auto', height: '2.25rem' }}
+        className="shrink-0 object-contain"
       />
       <div className="min-w-0 leading-tight">
         <p className="truncate text-sm font-semibold tracking-tight">Procurement</p>

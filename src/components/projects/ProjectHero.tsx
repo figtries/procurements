@@ -1,7 +1,7 @@
 import { ClipboardList, ListChecks, Trash2 } from 'lucide-react';
 import type { ProcurementItem, Project } from '@/types';
 import { computeOverallProgress, fmtDate } from '@/lib/procurement';
-import ProgBar from '@/components/dashboard/ProgBar';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -22,8 +22,8 @@ export default function ProjectHero({
       <Card className="justify-center border-t-4 border-t-border py-14">
         <CardContent className="flex flex-col items-center gap-2 text-center">
           <ClipboardList className="size-8 text-muted-foreground/50" />
-          <p className="text-sm font-semibold">Belum ada project dipilih</p>
-          <p className="text-sm text-muted-foreground">Buat atau pilih project dari daftar di bawah.</p>
+          <p className="text-sm font-semibold">No project selected</p>
+          <p className="text-sm text-muted-foreground">Create one, or pick a project from the list below.</p>
         </CardContent>
       </Card>
     );
@@ -38,13 +38,13 @@ export default function ProjectHero({
     <Card className="border-t-4 border-t-primary">
       <CardContent className="flex h-full flex-col">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Project aktif
+          Active project
         </p>
         <h2 className="mt-2 text-2xl font-semibold leading-tight tracking-tight">{project.name}</h2>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {[project.client, project.location, project.pic && `PIC: ${project.pic}`]
             .filter(Boolean).join(' · ')}
-          {project.contractNo && <><br />Kontrak: {project.contractNo}</>}
+          {project.contractNo && <><br />Contract: {project.contractNo}</>}
         </p>
 
         <div className="mt-6">
@@ -52,7 +52,7 @@ export default function ProjectHero({
             <span className="text-sm font-medium text-muted-foreground">Overall Progress</span>
             <span className="text-lg font-semibold tabular">{progress}%</span>
           </div>
-          <ProgBar value={progress} className="h-2" />
+          <Progress value={progress} trackClassName="h-2" indicatorClassName="transition-[width] duration-700" />
         </div>
 
         <Separator className="my-5" />
@@ -66,7 +66,7 @@ export default function ProjectHero({
         {project.handover && (
           <div className="mt-5 flex items-center justify-between rounded-lg bg-muted/60 px-4 py-3">
             <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Target handover
+              Handover target
             </span>
             <span className="text-sm font-semibold tabular">{fmtDate(project.handover)}</span>
           </div>
@@ -75,11 +75,11 @@ export default function ProjectHero({
         <div className="mt-auto flex gap-2 pt-6">
           <Button className="flex-1" variant="outline" onClick={onGoOverview}>
             <ListChecks className="size-4" />
-            Lihat Overview
+            View Overview
           </Button>
           <Button variant="destructive" onClick={onDeleteProject}>
             <Trash2 className="size-4" />
-            Hapus
+            Delete
           </Button>
         </div>
       </CardContent>

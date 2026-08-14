@@ -275,7 +275,7 @@ function detectHeaders(sheet: ExcelJS.Worksheet): HeaderMap | null {
 function parseSheet(sheet: ExcelJS.Worksheet, result: ImportResult): void {
   const map = detectHeaders(sheet);
   if (!map) {
-    result.errors.push(`Sheet "${sheet.name}": baris header tidak ditemukan — dilewati.`);
+    result.errors.push(`Sheet "${sheet.name}": no header row found — skipped.`);
     return;
   }
   result.sheetsRead.push(sheet.name);
@@ -319,7 +319,7 @@ function parseSheet(sheet: ExcelJS.Worksheet, result: ImportResult): void {
       if (fatIsDone(fatStatus)) fat.actual = fatDate;
       else fat.plan = fatDate;
     } else if (fatText) {
-      warnings.push(`Tanggal FAT "${fatText}" tidak terbaca — disimpan sebagai catatan.`);
+      warnings.push(`FAT date "${fatText}" could not be parsed — kept as a note.`);
     }
     // Keep the original wording: "Online", "Ready at Narogong" and defect notes matter.
     fat.note = [distillFatNote(fatStatus), fatDate ? '' : fatText].filter(Boolean).join(' · ');
@@ -346,13 +346,13 @@ function parseSheet(sheet: ExcelJS.Worksheet, result: ImportResult): void {
     // A DO number means the goods shipped; without an actual date, use the sheet's own signal.
     if (doNo && !mos.actual && /SUDAH|SDH|LENGKAP|ON\s*SITE|DITERIMA|RECEIVED/i.test(statusNote)) {
       mos.actual = mosPlan || '';
-      if (!mos.actual) warnings.push('Keterangan menyebut material sudah on site, tapi tanggalnya belum ada.');
+      if (!mos.actual) warnings.push('Remarks say the material is on site, but no date was given.');
     }
 
     const qtyText = get(row, 'qty');
     const qty = Number(qtyText.replace(',', '.'));
 
-    if (!currentDiscipline) warnings.push('Disiplin tidak terdeteksi — pilih manual sebelum import.');
+    if (!currentDiscipline) warnings.push('Discipline not detected — pick one before importing.');
 
     result.rows.push({
       include: true,
@@ -399,7 +399,7 @@ export async function importWorkbook(
   try {
     await workbook.xlsx.load(await file.arrayBuffer());
   } catch {
-    result.errors.push('File tidak bisa dibaca. Pastikan formatnya .xlsx (bukan .xls atau .csv).');
+    result.errors.push('Could not read the file. Make sure it is .xlsx, not .xls or .csv.');
     return result;
   }
 
@@ -414,12 +414,12 @@ export async function importWorkbook(
     try {
       parseSheet(sheet, result);
     } catch (err) {
-      result.errors.push(`Sheet "${sheet.name}" gagal dibaca: ${(err as Error).message}`);
+      result.errors.push(`Sheet "${sheet.name}" failed to parse: ${(err as Error).message}`);
     }
   });
 
   if (!result.rows.length && !result.errors.length) {
-    result.errors.push('Tidak ada baris item yang dikenali di file ini.');
+    result.errors.push('No item rows were recognised in this file.');
   }
 
   /* Flag duplicates within the file — later revisions of a sheet usually win. */
@@ -429,7 +429,7 @@ export async function importWorkbook(
     if (seen.has(key)) {
       row.duplicateOf = seen.get(key);
       row.include = false;
-      row.warnings.push(`Duplikat dari baris ${result.rows[seen.get(key)!].sourceSheet} #${result.rows[seen.get(key)!].sourceRow}.`);
+      row.warnings.push(`Duplicate of ${result.rows[seen.get(key)!].sourceSheet} row ${result.rows[seen.get(key)!].sourceRow}.`);
     } else {
       seen.set(key, idx);
     }

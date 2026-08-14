@@ -21,7 +21,7 @@ export default function ProjectGrid({
         <CardContent className="flex flex-col items-center gap-2 text-center">
           <Folder className="size-8 text-muted-foreground/50" />
           <p className="text-sm text-muted-foreground">
-            Belum ada project. Buat yang pertama lewat form di atas.
+            No projects yet. Create your first one with the form above.
           </p>
         </CardContent>
       </Card>
@@ -56,7 +56,7 @@ export default function ProjectGrid({
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{proj.name}</span>
                 <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                  {proj.client || 'Tanpa client'} · {itemCount} item
+                  {proj.client || 'No client'} · {itemCount} item{itemCount === 1 ? '' : 's'}
                 </span>
               </span>
             </button>
@@ -64,7 +64,7 @@ export default function ProjectGrid({
             <Button
               variant="ghost"
               size="icon"
-              aria-label={`Hapus project ${proj.name}`}
+              aria-label={`Delete project ${proj.name}`}
               className="size-8 shrink-0 text-muted-foreground hover:bg-late-bg hover:text-late-fg"
               onClick={() => onDelete(proj)}
             >

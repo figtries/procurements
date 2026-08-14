@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Menu } from 'lucide-react';
+import { ViewTransition, useEffect, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { DUMMY_PROJECT, DUMMY_ITEMS } from '@/lib/dummyData';
 
@@ -14,8 +13,10 @@ import DashboardPage from '@/components/dashboard/DashboardPage';
 import OverviewPage from '@/components/dashboard/OverviewPage';
 import ItemDetail from '@/components/dashboard/ItemDetail';
 import ProjectsPage from '@/components/projects/ProjectsPage';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import {
+  SidebarInset, SidebarProvider, SidebarTrigger,
+} from '@/components/ui/sidebar';
+import { Separator } from '@/components/ui/separator';
 
 import {
   genId,
@@ -37,10 +38,19 @@ function buildMilestone(plan: string, fc: string, act: string, note: string): Mi
   return { plan, forecast: fc, actual: act, note };
 }
 
+const PAGE_TITLES: Record<PageName, string> = {
+  dashboard: 'Dashboard',
+  overview: 'Overview',
+  projects: 'Projects',
+  itemDetail: 'Item detail',
+};
+
 /* ─────────────── MAIN PAGE ─────────────── */
 export default function ProcurementApp() {
   const [page, setPage] = useState<PageName>('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  /** Routing state runs through a transition so <ViewTransition> can animate it. */
+  const [, startNav] = useTransition();
 
   /* ── Data state (lazily initialised to avoid cascading renders) ── */
   const [projects, setProjects] = useState<Project[]>(() => {
@@ -110,13 +120,19 @@ export default function ProcurementApp() {
 
   /* ─── Navigation ─── */
   function nav(p: PageName) {
-    setPage(p);
-    setSidebarOpen(false);
+    startNav(() => setPage(p));
+  }
+
+  function openDetail(item: ProcurementItem) {
+    startNav(() => {
+      setDetailItem(item);
+      setPage('itemDetail');
+    });
   }
 
   /* ─── Project CRUD ─── */
   function handleCreateProject() {
-    if (!pfForm.name.trim()) { toast.error('Nama project wajib diisi'); return; }
+    if (!pfForm.name.trim()) { toast.error('Project name is required'); return; }
     const proj: Project = {
       id: genId(),
       name: pfForm.name.trim(),
@@ -133,7 +149,7 @@ export default function ProcurementApp() {
     setActiveProjectId(proj.id);
     saveActiveProject(proj.id);
     setPfForm({ name: '', client: '', location: '', pic: '', contractNo: '', handover: '' });
-    toast.success(`Project "${proj.name}" dibuat.`);
+    toast.success(`Project “${proj.name}” created.`);
   }
 
   function handleSelectProject(id: string) {
@@ -158,7 +174,7 @@ export default function ProcurementApp() {
       saveActiveProject(next);
     }
     setDeleteOpen(false);
-    toast.success('Project dihapus.');
+    toast.success('Project deleted.');
   }
 
   /* ─── Item CRUD ─── */
@@ -203,7 +219,7 @@ export default function ProcurementApp() {
       if (detailItem?.id === editingItem.id) {
         setDetailItem({ ...editingItem, ...base, ...derived });
       }
-      toast.success('Item diperbarui.');
+      toast.success('Item updated.');
     } else {
       const newItem: ProcurementItem = {
         ...base, id: genId(), ...derived, createdAt: new Date().toISOString(),
@@ -211,7 +227,7 @@ export default function ProcurementApp() {
       const updated = [...items, newItem];
       setItems(updated);
       saveItems(updated);
-      toast.success('Item ditambahkan.');
+      toast.success('Item added.');
     }
     closeItemForm();
   }
@@ -260,17 +276,19 @@ export default function ProcurementApp() {
     }
 
     const next = Array.from(byId.values());
-    setItems(next);
+    startNav(() => {
+      setItems(next);
+      setImportOpen(false);
+    });
     saveItems(next);
-    setImportOpen(false);
-    toast.success('Import selesai', {
-      description: `${inserted} item baru${updated ? `, ${updated} diperbarui` : ''}.`,
+    toast.success('Import complete', {
+      description: `${inserted} new item${inserted === 1 ? '' : 's'}${updated ? `, ${updated} updated` : ''}.`,
     });
   }
 
   /** Write the workbook and bump the project revision so the sheet header stays in step. */
   async function handleExport() {
-    if (!projectItems.length) { toast.error('Belum ada item untuk di-export.'); return; }
+    if (!projectItems.length) { toast.error('No items to export yet.'); return; }
     setExporting(true);
     try {
       const { revision, fileName } = await exportWorkbook(activeProject, projectItems);
@@ -281,9 +299,9 @@ export default function ProcurementApp() {
         setProjects(nextProjects);
         saveProjects(nextProjects);
       }
-      toast.success(`Excel rev.${revision} diunduh`, { description: fileName });
+      toast.success(`Excel rev.${revision} downloaded`, { description: fileName });
     } catch (err) {
-      toast.error('Export gagal', { description: (err as Error).message });
+      toast.error('Export failed', { description: (err as Error).message });
     } finally {
       setExporting(false);
     }
@@ -301,10 +319,12 @@ export default function ProcurementApp() {
       setItems(updated);
       saveItems(updated);
       if (detailItem?.id === deleteTarget.id) {
-        setDetailItem(null);
-        setPage('overview');
+        startNav(() => {
+          setDetailItem(null);
+          setPage('overview');
+        });
       }
-      toast.success('Item dihapus.');
+      toast.success('Item deleted.');
       setDeleteOpen(false);
     } else {
       doDeleteProject();
@@ -345,111 +365,95 @@ export default function ProcurementApp() {
   const uniqueVendors = Array.from(new Set(projectItems.map(i => i.vendor).filter(Boolean)));
   const uniqueDiscs   = Array.from(new Set(projectItems.map(i => i.discipline).filter(Boolean)));
 
-  const sidebar = (
-    <AppSidebar
-      page={page}
-      attention={attention}
-      exporting={exporting}
-      onNavigate={nav}
-      onImport={() => { setImportOpen(true); setSidebarOpen(false); }}
-      onExport={() => { handleExport(); setSidebarOpen(false); }}
-    />
-  );
-
   /* ─────── RENDER ─────── */
   if (!isMounted) return null;
 
   return (
-    <>
-      <div className="min-h-svh lg:grid lg:grid-cols-[16rem_minmax(0,1fr)]">
-        {/* Desktop rail */}
-        <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 overflow-y-auto border-r bg-sidebar text-sidebar-foreground lg:block">
-          {sidebar}
-        </aside>
-        <div className="hidden lg:block" aria-hidden />
+    <SidebarProvider>
+      <AppSidebar page={page} attention={attention} onNavigate={nav} />
 
-        {/* Mobile header */}
-        <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b bg-background/80 px-4 backdrop-blur lg:hidden">
-          <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
-            <SheetTrigger render={<Button variant="outline" size="icon" aria-label="Buka menu" />}>
-              <Menu className="size-4" />
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 bg-sidebar p-0 text-sidebar-foreground">
-              <SheetTitle className="sr-only">Menu navigasi</SheetTitle>
-              {sidebar}
-            </SheetContent>
-          </Sheet>
-          <span className="truncate text-sm font-semibold">
+      <SidebarInset>
+        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-sm">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-1 h-4" />
+          <span className="truncate text-sm font-medium">
             {activeProject?.name ?? 'Procurement'}
           </span>
+          <span className="text-muted-foreground/50">/</span>
+          <span className="truncate text-sm text-muted-foreground">{PAGE_TITLES[page]}</span>
         </header>
 
-        {/* Main */}
-        <main className="mx-auto w-full max-w-[1120px] px-4 pb-24 pt-6 sm:px-6 lg:px-10 lg:pt-11">
-          {page === 'dashboard' && (
-            <DashboardPage
-              project={activeProject}
-              items={projectItems}
-              onOpenItem={item => { setDetailItem(item); setPage('itemDetail'); }}
-              onImport={() => setImportOpen(true)}
-              onExport={handleExport}
-              exporting={exporting}
-            />
-          )}
+        <main className="mx-auto w-full max-w-[1120px] px-4 pb-24 pt-6 sm:px-6 lg:px-10">
+          <ViewTransition key={page} name="app-page" share="auto" enter="auto" exit="auto" default="none">
+            <div>
+              {page === 'dashboard' && (
+                <DashboardPage
+                  project={activeProject}
+                  items={projectItems}
+                  onOpenItem={openDetail}
+                  onImport={() => setImportOpen(true)}
+                  onExport={handleExport}
+                  exporting={exporting}
+                />
+              )}
 
-          {page === 'projects' && (
-            <ProjectsPage
-              projects={projects}
-              items={items}
-              activeProject={activeProject}
-              activeProjectId={activeProjectId}
-              form={pfForm}
-              onFormChange={(field, value) => setPfForm(f => ({ ...f, [field]: value }))}
-              onCreateProject={handleCreateProject}
-              onSelectProject={handleSelectProject}
-              onDeleteProject={confirmDeleteProject}
-              onGoOverview={() => nav('overview')}
-              onDeleteActiveProject={() => activeProject && confirmDeleteProject(activeProject)}
-            />
-          )}
+              {page === 'projects' && (
+                <ProjectsPage
+                  projects={projects}
+                  items={items}
+                  activeProject={activeProject}
+                  activeProjectId={activeProjectId}
+                  form={pfForm}
+                  onFormChange={(field, value) => setPfForm(f => ({ ...f, [field]: value }))}
+                  onCreateProject={handleCreateProject}
+                  onSelectProject={handleSelectProject}
+                  onDeleteProject={confirmDeleteProject}
+                  onGoOverview={() => nav('overview')}
+                  onDeleteActiveProject={() => activeProject && confirmDeleteProject(activeProject)}
+                />
+              )}
 
-          {page === 'overview' && (
-            <OverviewPage
-              projectName={activeProject?.name ?? ''}
-              projectItems={projectItems}
-              filteredItems={filteredItems}
-              grouped={grouped}
-              groupBy={groupBy}
-              search={search}
-              filterStatus={filterStatus}
-              filterDisc={filterDisc}
-              filterVendor={filterVendor}
-              hasFilters={hasFilters}
-              uniqueDiscs={uniqueDiscs}
-              uniqueVendors={uniqueVendors}
-              hasProject={!!activeProject}
-              onSearch={setSearch}
-              onFilterStatus={setFilterStatus}
-              onFilterDisc={setFilterDisc}
-              onFilterVendor={setFilterVendor}
-              onClearFilters={() => { setSearch(''); setFilterStatus(''); setFilterDisc(''); setFilterVendor(''); }}
-              onGroupBy={setGroupBy}
-              onAddProject={() => nav('projects')}
-              onAddItem={() => openItemForm()}
-              onOpenDetail={item => { setDetailItem(item); setPage('itemDetail'); }}
-            />
-          )}
+              {page === 'overview' && (
+                <OverviewPage
+                  projectName={activeProject?.name ?? ''}
+                  projectItems={projectItems}
+                  filteredItems={filteredItems}
+                  grouped={grouped}
+                  groupBy={groupBy}
+                  search={search}
+                  filterStatus={filterStatus}
+                  filterDisc={filterDisc}
+                  filterVendor={filterVendor}
+                  hasFilters={hasFilters}
+                  uniqueDiscs={uniqueDiscs}
+                  uniqueVendors={uniqueVendors}
+                  hasProject={!!activeProject}
+                  onSearch={setSearch}
+                  onFilterStatus={setFilterStatus}
+                  onFilterDisc={setFilterDisc}
+                  onFilterVendor={setFilterVendor}
+                  onClearFilters={() => {
+                    setSearch(''); setFilterStatus(''); setFilterDisc(''); setFilterVendor('');
+                  }}
+                  onGroupBy={setGroupBy}
+                  onAddProject={() => nav('projects')}
+                  onAddItem={() => openItemForm()}
+                  onOpenDetail={openDetail}
+                />
+              )}
 
-          {page === 'itemDetail' && detailItem && (
-            <ItemDetail
-              item={detailItem}
-              onBack={() => setPage('overview')}
-              onEdit={item => openItemForm(item)}
-              onDelete={item => confirmDeleteItem(item)}
-            />
-          )}
+              {page === 'itemDetail' && detailItem && (
+                <ItemDetail
+                  item={detailItem}
+                  onBack={() => nav('overview')}
+                  onEdit={item => openItemForm(item)}
+                  onDelete={item => confirmDeleteItem(item)}
+                />
+              )}
+            </div>
+          </ViewTransition>
         </main>
-      </div>
+      </SidebarInset>
 
       <ImportModal
         open={importOpen}
@@ -467,15 +471,15 @@ export default function ProcurementApp() {
 
       <DeleteModal
         open={deleteOpen}
-        title={deleteTarget?.type === 'project' ? 'Hapus project?' : 'Hapus item?'}
+        title={deleteTarget?.type === 'project' ? 'Delete project?' : 'Delete item?'}
         desc={
           deleteTarget?.type === 'project'
-            ? `"${deleteTarget?.name}" beserta seluruh item procurement-nya akan dihapus permanen.`
-            : `"${deleteTarget?.name}" akan dihapus permanen.`
+            ? `“${deleteTarget?.name}” and all of its procurement items will be permanently deleted.`
+            : `“${deleteTarget?.name}” will be permanently deleted.`
         }
         onCancel={() => setDeleteOpen(false)}
         onConfirm={doDelete}
       />
-    </>
+    </SidebarProvider>
   );
 }

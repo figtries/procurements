@@ -26,8 +26,8 @@ export default function DeleteModal({ open, title, desc, onCancel, onConfirm }: 
           <DialogDescription>{desc}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>Batal</Button>
-          <Button variant="destructive" onClick={onConfirm}>Hapus</Button>
+          <Button variant="outline" onClick={onCancel}>Cancel</Button>
+          <Button variant="destructive" onClick={onConfirm}>Delete</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

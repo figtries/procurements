@@ -4,8 +4,9 @@ import { ArrowLeft, Clock, Package, Pencil, Trash2, TriangleAlert } from 'lucide
 import type { ProcurementItem } from '@/types';
 import { fmtDate, getDisciplineStyle } from '@/lib/procurement';
 import StatusBadge from './Badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import MilestoneRow from './MilestoneRow';
-import ProgBar from './ProgBar';
+import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -47,34 +48,31 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
   ];
 
   return (
-    <div className="animate-page-in">
+    <div className="space-y-4">
       <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 mb-3 text-muted-foreground">
         <ArrowLeft className="size-4" />
-        Kembali ke Overview
+        Back to Overview
       </Button>
 
       {(isLate || isAtRisk) && (
-        <div className={cn(
-          'mb-4 flex items-start gap-3 rounded-xl border px-4 py-3.5',
-          isLate ? 'border-late/20 bg-late-bg' : 'border-atrisk/25 bg-atrisk-bg',
+        <Alert className={cn(
+          'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-1',
+          isLate
+            ? 'border-late/20 bg-late-bg text-late-fg'
+            : 'border-atrisk/25 bg-atrisk-bg text-atrisk-fg',
         )}>
-          {isLate
-            ? <TriangleAlert className="size-5 shrink-0 text-late-fg" />
-            : <Clock className="size-5 shrink-0 text-atrisk-fg" />}
-          <p className={cn('text-sm', isLate ? 'text-late-fg' : 'text-atrisk-fg')}>
-            {isLate ? (
-              <><span className="font-semibold">Item lewat tempo.</span>{' '}
-                Ada milestone yang tenggatnya sudah lewat tanpa tanggal aktual.</>
-            ) : (
-              <><span className="font-semibold">At risk.</span>{' '}
-                FAT jatuh tempo dalam 14 hari. Konfirmasi kesiapan ke vendor.</>
-            )}
-          </p>
-        </div>
+          {isLate ? <TriangleAlert /> : <Clock />}
+          <AlertTitle>{isLate ? 'Item is overdue.' : 'At risk.'}</AlertTitle>
+          <AlertDescription className={isLate ? 'text-late-fg/80' : 'text-atrisk-fg/80'}>
+            {isLate
+              ? 'A milestone deadline has passed with no actual date recorded.'
+              : 'FAT falls due within 14 days. Confirm readiness with the vendor.'}
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Hero */}
-      <Card className="mb-4">
+      <Card>
         <CardContent>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
@@ -96,7 +94,7 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
               </Button>
               <Button variant="destructive" size="sm" onClick={() => onDelete(item)}>
                 <Trash2 className="size-3.5" />
-                Hapus
+                Delete
               </Button>
             </div>
           </div>
@@ -109,18 +107,18 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
               <div className="mb-2 flex items-baseline justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Overall Progress</p>
-                  <p className="text-xs text-muted-foreground">Berdasarkan milestone yang selesai</p>
+                  <p className="text-xs text-muted-foreground">Based on completed milestones</p>
                 </div>
                 <span className="text-2xl font-semibold tracking-tight tabular">{item.progress}%</span>
               </div>
-              <ProgBar value={item.progress} className="h-2.5" />
+              <Progress value={item.progress} trackClassName="h-2.5" indicatorClassName="transition-[width] duration-700" />
             </div>
 
             <div>
               <div className="mb-2 flex items-baseline justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium">Document Readiness</p>
-                  <p className="text-xs text-muted-foreground">Kelengkapan dokumen vendor</p>
+                  <p className="text-xs text-muted-foreground">Vendor document completeness</p>
                 </div>
                 <span className={cn(
                   'text-2xl font-semibold tracking-tight tabular',
@@ -129,7 +127,7 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
                   {readinessPct}%
                 </span>
               </div>
-              <ProgBar value={readinessPct} className="h-2.5" indicatorClassName={readinessTone} />
+              <Progress value={readinessPct} trackClassName="h-2.5" indicatorClassName={cn('transition-[width] duration-700', readinessTone)} />
             </div>
           </div>
 
@@ -151,10 +149,10 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
       </Card>
 
       {/* Delivery Order */}
-      <Card className="mb-4">
+      <Card>
         <CardHeader>
           <CardTitle>Delivery Order</CardTitle>
-          <CardDescription>Bukti pengiriman dari vendor</CardDescription>
+          <CardDescription>Proof of shipment from the vendor</CardDescription>
         </CardHeader>
         <CardContent>
           {doNumbers.length > 0 ? (
@@ -177,8 +175,8 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
                 : 'border-l-border bg-muted/50 text-muted-foreground',
             )}>
               {needsDo
-                ? 'Material tercatat sudah on site, tapi nomor DO belum diisi. Lengkapi lewat tombol Edit.'
-                : 'Belum ada nomor DO. Akan terisi setelah vendor mengirim surat jalan.'}
+                ? 'Material is recorded on site but no DO number was entered. Add it via Edit.'
+                : 'No DO number yet. It appears once the vendor sends the delivery note.'}
             </p>
           )}
 

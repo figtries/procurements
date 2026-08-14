@@ -8,6 +8,7 @@ import { DISCIPLINES, fmtDate } from '@/lib/procurement';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -48,10 +49,15 @@ export default function ImportModal({
   async function readFile(file: File) {
     setReading(true);
     setFileName(file.name);
+    // Parsing a workbook blocks the main thread, so give the browser a beat to
+    // paint the loading state first — otherwise the UI just freezes with no
+    // feedback. A timer rather than rAF: rAF never fires in a hidden tab, which
+    // would leave the import stuck if the user switched away.
+    await new Promise(resolve => setTimeout(resolve, 32));
     try {
       setResult(await importWorkbook(file, existingItems));
     } catch (err) {
-      setResult({ rows: [], sheetsRead: [], errors: [`Gagal membaca file: ${(err as Error).message}`] });
+      setResult({ rows: [], sheetsRead: [], errors: [`Could not read the file: ${(err as Error).message}`] });
     } finally {
       setReading(false);
     }
@@ -83,16 +89,16 @@ export default function ImportModal({
     <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
       <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-5xl">
         <DialogHeader className="border-b p-4">
-          <DialogTitle>Import dari Excel</DialogTitle>
+          <DialogTitle>Import from Excel</DialogTitle>
           <DialogDescription>
-            Sistem membaca setiap sheet, mengenali baris header, dan memisahkan disiplin dari
-            baris section seperti “A. ELECTRICAL”.
+            Every sheet is read, header rows are detected, and disciplines are split out of
+            section rows such as “A. ELECTRICAL”.
           </DialogDescription>
         </DialogHeader>
 
         <div className="max-h-[calc(90svh-11rem)] overflow-y-auto p-4">
           {/* ── Drop zone ── */}
-          {!result && (
+          {!result && !reading && (
             <button
               type="button"
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
@@ -105,23 +111,42 @@ export default function ImportModal({
               }}
               onClick={() => inputRef.current?.click()}
               className={cn(
-                'flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-14 transition',
+                'group flex w-full flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-14',
+                'transition-colors duration-200',
                 dragging ? 'border-primary bg-accent' : 'bg-muted/40 hover:border-primary/50',
               )}
             >
-              <Upload className="size-8 text-muted-foreground/60" />
-              <span className="text-base font-medium">
-                {reading ? 'Membaca file…' : 'Tarik file Excel ke sini'}
-              </span>
+              <Upload className="size-8 text-muted-foreground/60 transition-transform duration-200 group-hover:-translate-y-0.5" />
+              <span className="text-base font-medium">Drop an Excel file here</span>
               <span className="text-sm text-muted-foreground">
-                atau klik untuk memilih · format .xlsx
+                or click to browse · .xlsx format
               </span>
-              {reading && (
-                <span className="mt-1 text-xs text-muted-foreground">
-                  File besar bisa perlu beberapa detik.
-                </span>
-              )}
             </button>
+          )}
+
+          {/* Parsing a large workbook blocks for a few seconds, so show the
+              shape of the table that is coming rather than a bare spinner. */}
+          {reading && (
+            <div className="animate-in fade-in space-y-3">
+              <div className="flex items-center gap-2.5 rounded-xl bg-muted/60 px-4 py-3">
+                <FileSpreadsheet className="size-4 shrink-0 animate-pulse text-muted-foreground" />
+                <span className="truncate text-sm font-medium">{fileName}</span>
+                <span className="ml-auto text-xs text-muted-foreground">Reading file…</span>
+              </div>
+              <div className="space-y-2 rounded-xl border p-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Skeleton className="size-4 rounded" />
+                    <Skeleton className="h-4 flex-1" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ))}
+              </div>
+              <p className="text-center text-xs text-muted-foreground">
+                Large files can take a few seconds.
+              </p>
+            </div>
           )}
 
           <input
@@ -154,18 +179,18 @@ export default function ImportModal({
                   <FileSpreadsheet className="size-4 shrink-0 text-muted-foreground" />
                   <span className="truncate text-sm font-medium">{fileName}</span>
                   <Button variant="link" size="sm" className="h-auto p-0" onClick={reset}>
-                    Ganti file
+                    Change file
                   </Button>
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span><b className="text-foreground tabular">{rows.length}</b> baris dibaca</span>
+                  <span><b className="text-foreground tabular">{rows.length}</b> rows read</span>
                   <span>
-                    <b className="text-foreground tabular">{result.sheetsRead.length}</b> sheet:{' '}
+                    <b className="text-foreground tabular">{result.sheetsRead.length}</b> sheet{result.sheetsRead.length === 1 ? '' : 's'}:{' '}
                     {result.sheetsRead.join(', ')}
                   </span>
                   {duplicates > 0 && (
                     <span className="text-atrisk-fg">
-                      <b className="tabular">{duplicates}</b> duplikat
+                      <b className="tabular">{duplicates}</b> duplicates
                     </span>
                   )}
                 </div>
@@ -173,18 +198,18 @@ export default function ImportModal({
 
               {needsDiscipline > 0 && (
                 <div className="mb-3 rounded-lg border border-atrisk/25 bg-atrisk-bg px-3.5 py-2.5 text-sm text-atrisk-fg">
-                  {needsDiscipline} baris belum punya disiplin. Pilih di kolom Disiplin sebelum import.
+                  {needsDiscipline} rows have no discipline yet. Set one in the Discipline column before importing.
                 </div>
               )}
 
               <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-sm text-muted-foreground">
-                  <b className="text-foreground tabular">{selected.length}</b> dipilih — {willInsert} item baru
-                  {willUpdate > 0 && `, ${willUpdate} memperbarui item yang sudah ada`}
+                  <b className="text-foreground tabular">{selected.length}</b> selected — {willInsert} new
+                  {willUpdate > 0 && `, ${willUpdate} updating existing items`}
                 </p>
                 <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setAll(true)}>Pilih semua</Button>
-                  <Button variant="outline" size="sm" onClick={() => setAll(false)}>Kosongkan</Button>
+                  <Button variant="outline" size="sm" onClick={() => setAll(true)}>Select all</Button>
+                  <Button variant="outline" size="sm" onClick={() => setAll(false)}>Clear</Button>
                 </div>
               </div>
 
@@ -194,13 +219,13 @@ export default function ImportModal({
                     <TableRow>
                       <TableHead className="w-10" />
                       <TableHead className="min-w-48">Equipment</TableHead>
-                      <TableHead className="w-36">Disiplin</TableHead>
+                      <TableHead className="w-36">Discipline</TableHead>
                       <TableHead className="min-w-32">Vendor</TableHead>
                       <TableHead className="w-28">PO No</TableHead>
                       <TableHead className="w-16 text-center">Rdns</TableHead>
                       <TableHead className="w-28">FAT</TableHead>
                       <TableHead className="w-28">Delivery</TableHead>
-                      <TableHead className="min-w-40">Keterangan</TableHead>
+                      <TableHead className="min-w-40">Remarks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -211,8 +236,10 @@ export default function ImportModal({
                       return (
                         <TableRow
                           key={`${row.sourceSheet}-${row.sourceRow}`}
+                          style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
                           className={cn(
-                            'align-top',
+                            'align-top transition-colors',
+                            'motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-backwards',
                             isDup && 'bg-atrisk-bg',
                             row.matchesItemId && 'bg-onsite-bg',
                             !row.include && 'opacity-50',
@@ -222,19 +249,19 @@ export default function ImportModal({
                             <Checkbox
                               checked={row.include}
                               onCheckedChange={v => updateRow(i, { include: v === true })}
-                              aria-label={`Sertakan ${row.desc}`}
+                              aria-label={`Include ${row.desc}`}
                             />
                           </TableCell>
                           <TableCell>
                             <p className="font-medium leading-snug">{row.desc}</p>
                             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
-                              {row.sourceSheet} · baris {row.sourceRow}
+                              {row.sourceSheet} · row {row.sourceRow}
                               {row.matchesItemId && (
                                 <Badge
                                   variant="secondary"
                                   className="border-transparent bg-onsite-bg px-1.5 py-0 text-[9px] text-onsite-fg"
                                 >
-                                  memperbarui
+                                  updating
                                 </Badge>
                               )}
                               {isDup && (
@@ -242,7 +269,7 @@ export default function ImportModal({
                                   variant="secondary"
                                   className="border-transparent bg-atrisk-bg px-1.5 py-0 text-[9px] text-atrisk-fg"
                                 >
-                                  duplikat
+                                  duplicate
                                 </Badge>
                               )}
                             </p>
@@ -256,7 +283,7 @@ export default function ImportModal({
                               onValueChange={v => updateRow(i, { discipline: v ?? '' })}
                             >
                               <SelectTrigger size="sm" className="w-full">
-                                <SelectValue placeholder="— pilih —" />
+                                <SelectValue placeholder="— pick —" />
                               </SelectTrigger>
                               <SelectContent>
                                 {DISCIPLINES.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
@@ -289,12 +316,12 @@ export default function ImportModal({
         </div>
 
         <DialogFooter className="m-0 rounded-none">
-          <Button variant="outline" onClick={close}>Batal</Button>
+          <Button variant="outline" onClick={close}>Cancel</Button>
           <Button
             disabled={!selected.length || needsDiscipline > 0}
             onClick={() => { onConfirm(selected); reset(); }}
           >
-            {selected.length ? `Import ${selected.length} item` : 'Import'}
+            {selected.length ? `Import ${selected.length} item${selected.length === 1 ? '' : 's'}` : 'Import'}
           </Button>
         </DialogFooter>
       </DialogContent>

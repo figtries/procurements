@@ -209,7 +209,7 @@ export interface SCurvePoint {
   forecast: number | null;
 }
 
-const MONTHS_ID = ['JAN', 'FEB', 'MAR', 'APR', 'MEI', 'JUN', 'JUL', 'AGU', 'SEP', 'OKT', 'NOV', 'DES'];
+const MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
 
 /**
  * Build the plan / actual / forecast S-curve from milestone dates.
@@ -249,7 +249,7 @@ export function buildSCurve(items: ProcurementItem[], project: Project | null): 
 
     months.push({
       date,
-      label: `${MONTHS_ID[m]}${m === 0 ? ` '${String(y).slice(2)}` : ''}`,
+      label: `${MONTHS[m]}${m === 0 ? ` '${String(y).slice(2)}` : ''}`,
       plan: avg(planDate),
       actual: isPast ? avg(actualDate) : null,
       forecast: isPast ? null : avg(forecastDate),
@@ -371,7 +371,7 @@ export interface LookaheadWeek {
   events: LookaheadEvent[];
 }
 
-const DAYS_ID = ['MIN', 'SEN', 'SEL', 'RAB', 'KAM', 'JUM', 'SAB'];
+const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
 
 function startOfWeek(d: Date): Date {
   const out = new Date(d);
@@ -390,9 +390,9 @@ export function buildLookahead(items: ProcurementItem[], weeks = 4): LookaheadWe
   for (let w = 0; w < weeks; w++) {
     const from = new Date(first); from.setDate(from.getDate() + w * 7);
     const to   = new Date(from);  to.setDate(to.getDate() + 6);
-    const fmt  = (d: Date) => `${d.getDate()} ${MONTHS_ID[d.getMonth()].slice(0, 3)}`;
+    const fmt  = (d: Date) => `${d.getDate()} ${MONTHS[d.getMonth()].slice(0, 3)}`;
     buckets.push({
-      label: w === 0 ? 'Minggu ini' : w === 1 ? 'Minggu depan' : `Minggu ${w + 1}`,
+      label: w === 0 ? 'This week' : w === 1 ? 'Next week' : `Week ${w + 1}`,
       range: `${fmt(from)}–${fmt(to)}`,
       isCurrent: w === 0,
       events: [],
@@ -424,7 +424,7 @@ export function buildLookahead(items: ProcurementItem[], weeks = 4): LookaheadWe
         kind: key,
         label: MILESTONE_META[key].label,
         date,
-        day: DAYS_ID[target.getDay()],
+        day: DAYS[target.getDay()],
         desc: item.desc,
         vendor: item.vendor,
         overdue,
@@ -466,7 +466,7 @@ export function detectAnomalies(items: ProcurementItem[]): Anomaly[] {
         icon: '⚠️',
         rule: 'milestone-overdue',
         title: MILESTONE_META[key].label,
-        detail: `${MILESTONE_META[key].label} dijadwalkan ${fmtDate(deadline)} — sudah lewat ${late} hari tanpa tanggal aktual.`,
+        detail: `${MILESTONE_META[key].label} was due ${fmtDate(deadline)} — ${late} days past with no actual date recorded.`,
       });
       break; // one overdue milestone per item is enough to act on
     }
@@ -481,10 +481,10 @@ export function detectAnomalies(items: ProcurementItem[]): Anomaly[] {
           severity: daysToDelivery < 0 || item.readinessDoc < 0.5 ? 'crit' : 'warn',
           icon: '📄',
           rule: 'readiness-low-delivery-near',
-          title: 'Dokumen belum lengkap',
+          title: 'Documents incomplete',
           detail: daysToDelivery < 0
-            ? `Readiness dokumen ${Math.round(item.readinessDoc * 100)}% dan rencana delivery ${fmtDate(mosDue)} sudah terlewat.`
-            : `Readiness dokumen ${Math.round(item.readinessDoc * 100)}% tapi delivery tinggal ${daysToDelivery} hari lagi.`,
+            ? `Document readiness ${Math.round(item.readinessDoc * 100)}% and the planned delivery of ${fmtDate(mosDue)} has already passed.`
+            : `Document readiness ${Math.round(item.readinessDoc * 100)}% with delivery only ${daysToDelivery} days away.`,
         });
       }
     }
@@ -501,8 +501,8 @@ export function detectAnomalies(items: ProcurementItem[]): Anomaly[] {
           severity: firstDue < todayStr ? 'crit' : 'warn',
           icon: '🧾',
           rule: 'no-po-but-scheduled',
-          title: 'PO belum terbit',
-          detail: `Sudah ada jadwal milestone ${fmtDate(firstDue)} tapi nomor PO masih kosong.`,
+          title: 'No PO issued',
+          detail: `A milestone is scheduled for ${fmtDate(firstDue)} but the PO number is still empty.`,
         });
       }
     }
@@ -517,8 +517,8 @@ export function detectAnomalies(items: ProcurementItem[]): Anomaly[] {
         severity: slip > 14 ? 'crit' : 'warn',
         icon: '🚢',
         rule: 'forecast-slipped',
-        title: `${MILESTONE_META[key].label} mundur`,
-        detail: `Forecast ${MILESTONE_META[key].label} mundur ${slip} hari dari rencana — ${fmtDate(ms.plan)} → ${fmtDate(ms.forecast)}.`,
+        title: `${MILESTONE_META[key].label} slipped`,
+        detail: `${MILESTONE_META[key].label} forecast moved ${slip} days past plan — ${fmtDate(ms.plan)} → ${fmtDate(ms.forecast)}.`,
       });
       break;
     }
@@ -530,8 +530,8 @@ export function detectAnomalies(items: ProcurementItem[]): Anomaly[] {
         severity: 'warn',
         icon: '📦',
         rule: 'delivered-no-do',
-        title: 'No. DO belum diisi',
-        detail: `Material tercatat on site ${fmtDate(item.mos.actual)} tapi nomor Delivery Order masih kosong.`,
+        title: 'Delivery Order missing',
+        detail: `Material recorded on site ${fmtDate(item.mos.actual)} but no Delivery Order number was entered.`,
       });
     }
   }

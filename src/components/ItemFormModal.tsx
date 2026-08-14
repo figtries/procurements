@@ -68,9 +68,9 @@ interface ItemFormModalProps {
 }
 
 const MILESTONES = [
-  { label: 'FAT — Factory Acceptance Test', plan: 'fatPlan', fc: 'fatFc', act: 'fatAct', note: 'fatNote', placeholder: 'Catatan FAT (opsional)' },
-  { label: 'RTS — Ready To Ship',           plan: 'rtsPlan', fc: 'rtsFc', act: 'rtsAct', note: 'rtsNote', placeholder: 'Catatan RTS (opsional)' },
-  { label: 'MOS — Material On Site',        plan: 'mosPlan', fc: 'mosFc', act: 'mosAct', note: 'mosNote', placeholder: 'Catatan MOS (opsional)' },
+  { label: 'FAT — Factory Acceptance Test', plan: 'fatPlan', fc: 'fatFc', act: 'fatAct', note: 'fatNote', placeholder: 'FAT note (optional)' },
+  { label: 'RTS — Ready To Ship',           plan: 'rtsPlan', fc: 'rtsFc', act: 'rtsAct', note: 'rtsNote', placeholder: 'RTS note (optional)' },
+  { label: 'MOS — Material On Site',        plan: 'mosPlan', fc: 'mosFc', act: 'mosAct', note: 'mosNote', placeholder: 'MOS note (optional)' },
 ] as const;
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -108,15 +108,15 @@ export default function ItemFormModal({
 
   const validate = (): boolean => {
     const errs: typeof errors = {};
-    if (!form.desc.trim())   errs.desc       = 'Deskripsi wajib diisi';
-    if (!form.discipline)    errs.discipline = 'Pilih disiplin';
-    if (!form.vendor.trim()) errs.vendor     = 'Vendor wajib diisi';
-    if (!form.poNo.trim())   errs.poNo       = 'Nomor PO wajib diisi';
-    if (!form.poDate)        errs.poDate     = 'Tanggal PO wajib diisi';
-    if (!form.qty || Number(form.qty) <= 0) errs.qty = 'Isi jumlah yang valid';
+    if (!form.desc.trim())   errs.desc       = 'Description is required';
+    if (!form.discipline)    errs.discipline = 'Pick a discipline';
+    if (!form.vendor.trim()) errs.vendor     = 'Vendor is required';
+    if (!form.poNo.trim())   errs.poNo       = 'PO number is required';
+    if (!form.poDate)        errs.poDate     = 'PO date is required';
+    if (!form.qty || Number(form.qty) <= 0) errs.qty = 'Enter a valid quantity';
     const readiness = Number(form.readinessDoc);
     if (form.readinessDoc !== '' && (isNaN(readiness) || readiness < 0 || readiness > 100)) {
-      errs.readinessDoc = 'Isi antara 0 dan 100';
+      errs.readinessDoc = 'Enter a value between 0 and 100';
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -129,10 +129,10 @@ export default function ItemFormModal({
       <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
         <DialogHeader className="border-b p-4">
           <DialogTitle>
-            {editingItem ? 'Edit Procurement Item' : 'Tambah Procurement Item'}
+            {editingItem ? 'Edit Procurement Item' : 'Add Procurement Item'}
           </DialogTitle>
           <DialogDescription>
-            Isi yang sudah diketahui — sisanya bisa dilengkapi belakangan.
+            Fill in what you know — the rest can follow later.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,17 +141,17 @@ export default function ItemFormModal({
           <SectionLabel>Equipment</SectionLabel>
 
           <div className="grid gap-2">
-            <Label htmlFor="if-desc">Deskripsi <span className="text-destructive">*</span></Label>
+            <Label htmlFor="if-desc">Description <span className="text-destructive">*</span></Label>
             <Input
               id="if-desc" value={form.desc} onChange={set('desc')}
               aria-invalid={!!errors.desc}
-              placeholder="mis. Microturbine Generator Package"
+              placeholder="e.g. Microturbine Generator Package"
             />
             {errors.desc && <p className="text-xs text-destructive">{errors.desc}</p>}
           </div>
 
           <div className="grid gap-2">
-            <Label>Disiplin <span className="text-destructive">*</span></Label>
+            <Label>Discipline <span className="text-destructive">*</span></Label>
             <div className="flex flex-wrap gap-2">
               {DISCIPLINES.map(d => (
                 <Button
@@ -170,7 +170,7 @@ export default function ItemFormModal({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="if-qty">Jumlah <span className="text-destructive">*</span></Label>
+              <Label htmlFor="if-qty">Quantity <span className="text-destructive">*</span></Label>
               <Input
                 id="if-qty" type="number" min={0} value={form.qty} onChange={set('qty')}
                 aria-invalid={!!errors.qty} placeholder="1"
@@ -178,7 +178,7 @@ export default function ItemFormModal({
               {errors.qty && <p className="text-xs text-destructive">{errors.qty}</p>}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="if-unit">Satuan</Label>
+              <Label htmlFor="if-unit">Unit</Label>
               <Input id="if-unit" value={form.unit} onChange={set('unit')} placeholder="Ea / Lot / Set" />
             </div>
           </div>
@@ -193,37 +193,37 @@ export default function ItemFormModal({
               <Label htmlFor="if-vendor">Supplier / vendor <span className="text-destructive">*</span></Label>
               <Input
                 id="if-vendor" value={form.vendor} onChange={set('vendor')}
-                aria-invalid={!!errors.vendor} placeholder="mis. PT. Fajar Mas Murni"
+                aria-invalid={!!errors.vendor} placeholder="e.g. PT. Fajar Mas Murni"
               />
               {errors.vendor && <p className="text-xs text-destructive">{errors.vendor}</p>}
             </div>
             <div className="grid gap-2">
               <Label htmlFor="if-brand">Brand</Label>
-              <Input id="if-brand" value={form.brand} onChange={set('brand')} placeholder="mis. Flex Turbines" />
+              <Input id="if-brand" value={form.brand} onChange={set('brand')} placeholder="e.g. Flex Turbines" />
             </div>
           </div>
 
           <div className="grid gap-2">
             <Label htmlFor="if-delivery">Delivery term</Label>
-            <Input id="if-delivery" value={form.delivery} onChange={set('delivery')} placeholder="mis. DDP SKN" />
+            <Input id="if-delivery" value={form.delivery} onChange={set('delivery')} placeholder="e.g. DDP SKN" />
           </div>
 
           <Separator />
 
           {/* ── PO & dokumen ── */}
-          <SectionLabel>PO &amp; Dokumen</SectionLabel>
+          <SectionLabel>PO &amp; documents</SectionLabel>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="if-pono">No. PO <span className="text-destructive">*</span></Label>
+              <Label htmlFor="if-pono">PO no. <span className="text-destructive">*</span></Label>
               <Input
                 id="if-pono" value={form.poNo} onChange={set('poNo')}
-                aria-invalid={!!errors.poNo} placeholder="mis. PO-2501855"
+                aria-invalid={!!errors.poNo} placeholder="e.g. PO-2501855"
               />
               {errors.poNo && <p className="text-xs text-destructive">{errors.poNo}</p>}
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="if-podate">Tanggal PO <span className="text-destructive">*</span></Label>
+              <Label htmlFor="if-podate">PO date <span className="text-destructive">*</span></Label>
               <Input
                 id="if-podate" type="date" value={form.poDate} onChange={set('poDate')}
                 aria-invalid={!!errors.poDate}
@@ -248,7 +248,7 @@ export default function ItemFormModal({
               <Label htmlFor="if-dono">No. DO</Label>
               <Input
                 id="if-dono" value={form.doNo} onChange={set('doNo')}
-                placeholder="mis. 007/SP/DO/CPPG/V/26"
+                placeholder="e.g. 007/SP/DO/CPPG/V/26"
               />
             </div>
           </div>
@@ -257,7 +257,7 @@ export default function ItemFormModal({
             <Label htmlFor="if-top">Term of payment</Label>
             <Textarea
               id="if-top" value={form.termOfPayment} onChange={set('termOfPayment')}
-              placeholder="mis. 30% down payment · 70% after delivery"
+              placeholder="e.g. 30% down payment · 70% after delivery"
             />
           </div>
 
@@ -265,7 +265,7 @@ export default function ItemFormModal({
             <Label htmlFor="if-note">Status note</Label>
             <Textarea
               id="if-note" value={form.statusNote} onChange={set('statusNote')}
-              placeholder="mis. On progress fabrication"
+              placeholder="e.g. On progress fabrication"
             />
           </div>
 
@@ -304,8 +304,8 @@ export default function ItemFormModal({
         </div>
 
         <DialogFooter className="m-0 rounded-none">
-          <Button variant="outline" onClick={onClose}>Batal</Button>
-          <Button onClick={handleSave}>Simpan</Button>
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave}>Save</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

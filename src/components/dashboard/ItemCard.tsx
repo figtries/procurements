@@ -2,29 +2,47 @@ import { ChevronRight } from 'lucide-react';
 import type { ProcurementItem } from '@/types';
 import { STATUS_CLASSES, fmtDate, getDisciplineStyle, getNextMilestone } from '@/lib/procurement';
 import StatusBadge from './Badge';
-import ProgBar from './ProgBar';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
 interface ItemCardProps {
   item: ProcurementItem;
+  /** Position in its group, used to stagger the entry animation. */
+  index?: number;
   onClick: () => void;
 }
 
-export default function ItemCard({ item, onClick }: ItemCardProps) {
+/** Cap the stagger so long lists do not crawl in. */
+const MAX_STAGGER = 8;
+
+export default function ItemCard({ item, index = 0, onClick }: ItemCardProps) {
   const discStyle = getDisciplineStyle(item.discipline);
   const nextMile = getNextMilestone(item);
 
   return (
-    <button
-      onClick={onClick}
+    <Card
+      size="sm"
+      style={{ animationDelay: `${Math.min(index, MAX_STAGGER) * 35}ms` }}
       className={cn(
-        'group grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-xl border-l-[3px]',
-        'bg-card px-4 py-3.5 text-left ring-1 ring-foreground/10 transition',
-        'hover:ring-foreground/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'group relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-l-[3px] px-4 py-3',
+        'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
+        'transition-shadow duration-200 hover:shadow-sm hover:ring-foreground/25',
+        'has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring',
         'md:grid-cols-[minmax(0,1fr)_9rem_8rem_7rem_1.25rem]',
         STATUS_CLASSES[item.status].border,
       )}
     >
+      {/* Stretched hit area — keeps the whole row clickable without nesting
+          interactive content inside a button. */}
+      <button
+        type="button"
+        onClick={onClick}
+        className="absolute inset-0 z-10 rounded-xl outline-none"
+      >
+        <span className="sr-only">Open {item.desc}</span>
+      </button>
+
       <div className="min-w-0">
         <p className="truncate text-sm font-medium">
           <span
@@ -50,7 +68,10 @@ export default function ItemCard({ item, onClick }: ItemCardProps) {
           <span className="text-muted-foreground">Progress</span>
           <span className="tabular">{item.progress}%</span>
         </div>
-        <ProgBar value={item.progress} indicatorClassName={STATUS_CLASSES[item.status].rail} />
+        <Progress
+          value={item.progress}
+          indicatorClassName={cn('transition-[width] duration-500', STATUS_CLASSES[item.status].rail)}
+        />
       </div>
 
       <div className="hidden flex-col items-start gap-1.5 md:flex">
@@ -58,7 +79,7 @@ export default function ItemCard({ item, onClick }: ItemCardProps) {
         {nextMile && <span className="text-[11px] text-muted-foreground">{nextMile}</span>}
       </div>
 
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5" />
-    </button>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+    </Card>
   );
 }

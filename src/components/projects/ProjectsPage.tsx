@@ -31,11 +31,11 @@ export default function ProjectsPage({
   onCreateProject, onSelectProject, onDeleteProject, onGoOverview, onDeleteActiveProject,
 }: ProjectsPageProps) {
   return (
-    <div className="animate-page-in">
+    <div className="">
       <div className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight">Project Management</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pilih project yang ada, atau buat yang baru untuk mulai.
+          Pick an existing project, or create a new one to begin.
         </p>
       </div>
 
@@ -59,7 +59,7 @@ export default function ProjectsPage({
       </div>
 
       <h2 className="mb-3 mt-8 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Project tersimpan
+        Saved projects
       </h2>
       <ProjectGrid
         projects={projects}

@@ -50,7 +50,7 @@ export default function MilestoneRow({ name, ms, index, last }: MilestoneRowProp
           )}
           {ms.actual && <Pill label="Actual" value={fmtDate(ms.actual)} tone="done" />}
           {!ms.plan && !ms.forecast && !ms.actual && (
-            <span className="text-xs italic text-muted-foreground">Belum ada tanggal.</span>
+            <span className="text-xs italic text-muted-foreground">No dates set.</span>
           )}
         </div>
 

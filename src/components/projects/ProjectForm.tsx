@@ -23,19 +23,19 @@ export default function ProjectForm({
         <p className="text-[11px] font-semibold uppercase tracking-wider text-ontrack-fg">
           Procurement &amp; Vendor
         </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight">Buat project baru</h2>
+        <h2 className="mt-2 text-xl font-semibold tracking-tight">Create a new project</h2>
 
         <form
           className="mt-6 flex flex-1 flex-col gap-4"
           onSubmit={e => { e.preventDefault(); onSubmit(); }}
         >
           <div className="grid gap-2">
-            <Label htmlFor="pf-name">Nama project</Label>
+            <Label htmlFor="pf-name">Project name</Label>
             <Input
               id="pf-name"
               value={name}
               onChange={e => onChange('name', e.target.value)}
-              placeholder="Contoh: Pulau Gading BCS Phase 1"
+              placeholder="e.g. Pulau Gading BCS Phase 1"
             />
           </div>
 
@@ -45,15 +45,15 @@ export default function ProjectForm({
               <Input
                 id="pf-client" value={client}
                 onChange={e => onChange('client', e.target.value)}
-                placeholder="Nama perusahaan"
+                placeholder="Company name"
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="pf-location">Lokasi</Label>
+              <Label htmlFor="pf-location">Location</Label>
               <Input
                 id="pf-location" value={location}
                 onChange={e => onChange('location', e.target.value)}
-                placeholder="Kota / wilayah"
+                placeholder="City / region"
               />
             </div>
             <div className="grid gap-2">
@@ -61,14 +61,14 @@ export default function ProjectForm({
               <Input
                 id="pf-pic" value={pic}
                 onChange={e => onChange('pic', e.target.value)}
-                placeholder="Nama lengkap"
+                placeholder="Full name"
               />
             </div>
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="grid gap-2">
-              <Label htmlFor="pf-contract">No. kontrak</Label>
+              <Label htmlFor="pf-contract">Contract no.</Label>
               <Input
                 id="pf-contract" value={contractNo}
                 onChange={e => onChange('contractNo', e.target.value)}
@@ -76,7 +76,7 @@ export default function ProjectForm({
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="pf-handover">Target handover</Label>
+              <Label htmlFor="pf-handover">Handover target</Label>
               <Input
                 id="pf-handover" type="date" value={handover}
                 onChange={e => onChange('handover', e.target.value)}
@@ -84,7 +84,7 @@ export default function ProjectForm({
             </div>
           </div>
 
-          <Button type="submit" className="mt-auto w-full">Buat Project</Button>
+          <Button type="submit" className="mt-auto w-full">Create project</Button>
         </form>
       </CardContent>
     </Card>
