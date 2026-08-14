@@ -19,7 +19,7 @@ export default function ProjectHero({
 }: ProjectHeroProps) {
   if (!project) {
     return (
-      <Card className="justify-center border-t-4 border-t-border py-14">
+      <Card className="justify-center py-14">
         <CardContent className="flex flex-col items-center gap-2 text-center">
           <ClipboardList className="size-8 text-muted-foreground/50" />
           <p className="text-sm font-semibold">No project selected</p>
@@ -35,7 +35,7 @@ export default function ProjectHero({
   const atrisk    = projItems.filter(i => i.status === 'atrisk').length;
 
   return (
-    <Card className="border-t-4 border-t-primary">
+    <Card>
       <CardContent className="flex h-full flex-col">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Active project

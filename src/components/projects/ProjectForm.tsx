@@ -18,9 +18,9 @@ export default function ProjectForm({
   name, client, location, pic, contractNo, handover, onChange, onSubmit,
 }: ProjectFormProps) {
   return (
-    <Card className="border-t-4 border-t-ontrack">
+    <Card>
       <CardContent className="flex h-full flex-col">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-ontrack-fg">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Procurement &amp; Vendor
         </p>
         <h2 className="mt-2 text-xl font-semibold tracking-tight">Create a new project</h2>

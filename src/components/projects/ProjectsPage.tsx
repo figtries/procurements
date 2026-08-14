@@ -34,9 +34,6 @@ export default function ProjectsPage({
     <div className="">
       <div className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight">Project Management</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Pick an existing project, or create a new one to begin.
-        </p>
       </div>
 
       <div className="grid items-stretch gap-4 lg:grid-cols-[38%_minmax(0,1fr)]">

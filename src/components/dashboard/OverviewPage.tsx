@@ -179,9 +179,6 @@ export default function OverviewPage({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Procurement Overview</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Every ordered item, its vendor, progress, and schedule.
-            </p>
           </div>
           <div className="flex shrink-0 gap-2">
             <Button variant="outline" onClick={onAddProject}>

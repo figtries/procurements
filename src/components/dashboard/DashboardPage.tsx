@@ -17,7 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle,
+  Card, CardAction, CardContent, CardHeader, CardTitle,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -105,9 +105,6 @@ export default function DashboardPage({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Where the project stands against plan, and what falls due next.
-          </p>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button variant="outline" onClick={onImport}>
@@ -131,9 +128,6 @@ export default function DashboardPage({
           <CardContent className="flex flex-col items-center gap-3 text-center">
             <PackageSearch className="size-9 text-muted-foreground/50" />
             <p className="font-medium">Nothing to summarise yet.</p>
-            <p className="max-w-sm text-sm text-muted-foreground">
-              Import an existing Excel file, or add items from the Overview page.
-            </p>
             <Button className="mt-2" onClick={onImport}>
               <ArrowDownToLine className="size-4" />
               Import Excel
@@ -150,7 +144,7 @@ export default function DashboardPage({
 
       {/* ── Deviasi + kurva-S ── */}
       <div className="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
-        <Card className={cn('border-t-4', behind ? 'border-t-atrisk' : 'border-t-ontrack')}>
+        <Card>
           <CardContent className="flex h-full flex-col">
             <p className={cn(
               'text-[11px] font-semibold uppercase tracking-wider',
@@ -217,9 +211,6 @@ export default function DashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>S-Curve · Plan vs Actual</CardTitle>
-            <CardDescription>
-              Cumulative progress across all items, evenly weighted from milestone dates
-            </CardDescription>
             <CardAction className="hidden gap-4 sm:flex">
               <Legend swatch="bg-muted-foreground" label="Plan" />
               <Legend swatch="bg-onsite" label="Actual" />
@@ -259,9 +250,6 @@ export default function DashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>Milestone position</CardTitle>
-            <CardDescription>
-              How many items have cleared each stage, out of {items.length}
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             {milestones.map(ms => {
@@ -301,7 +289,6 @@ export default function DashboardPage({
         <Card>
           <CardHeader>
             <CardTitle>Breakdown by discipline</CardTitle>
-            <CardDescription>Status mix within each discipline</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -346,9 +333,6 @@ export default function DashboardPage({
       <Card className="mt-4">
         <CardHeader>
           <CardTitle>Falling due next</CardTitle>
-          <CardDescription>
-            Milestones still ahead, read from each item’s plan and forecast dates
-          </CardDescription>
           <CardAction>
             <Tabs value={weeks} onValueChange={v => startLookahead(() => setWeeks(v))}>
               <TabsList>
@@ -445,9 +429,6 @@ export default function DashboardPage({
       <Card className="mt-4">
         <CardHeader>
           <CardTitle>Detected anomalies</CardTitle>
-          <CardDescription>
-            Recalculated whenever data changes or an Excel file is imported
-          </CardDescription>
           <CardAction>
             <Badge variant="secondary" className="tabular">{anomalies.length} findings</Badge>
           </CardAction>
@@ -487,7 +468,6 @@ export default function DashboardPage({
       <Card className="mt-4">
         <CardHeader>
           <CardTitle>Vendors needing follow-up</CardTitle>
-          <CardDescription>Ordered by impact on the schedule</CardDescription>
           <CardAction>
             <Badge variant="secondary" className="tabular">{vendors.length} vendors</Badge>
           </CardAction>

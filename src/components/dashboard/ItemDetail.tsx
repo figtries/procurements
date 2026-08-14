@@ -8,7 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import MilestoneRow from './MilestoneRow';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 
@@ -152,7 +152,6 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
       <Card>
         <CardHeader>
           <CardTitle>Delivery Order</CardTitle>
-          <CardDescription>Proof of shipment from the vendor</CardDescription>
         </CardHeader>
         <CardContent>
           {doNumbers.length > 0 ? (
@@ -208,7 +207,6 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
       <Card>
         <CardHeader>
           <CardTitle>Milestone Schedule</CardTitle>
-          <CardDescription>FAT → RTS → MOS</CardDescription>
         </CardHeader>
         <CardContent className="pt-1">
           <MilestoneRow name="FAT — Factory Acceptance Test" ms={item.fat} index={0} />
