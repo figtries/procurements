@@ -13,8 +13,8 @@ export default function BrandLogo() {
         className="size-9 shrink-0 rounded-lg object-cover"
       />
       <div className="min-w-0 leading-tight">
-        <p className="truncate text-sm font-semibold tracking-tight">Procurement</p>
-        <p className="truncate text-xs text-muted-foreground">&amp; Vendor · Figtries</p>
+        <p className="truncate text-sm font-semibold tracking-tight">Vendor Procurement</p>
+        <p className="truncate text-xs text-muted-foreground">Figtries</p>
       </div>
     </div>
   );

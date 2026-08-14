@@ -1,4 +1,4 @@
-import { ClipboardList, ListChecks, Trash2 } from 'lucide-react';
+import { ClipboardList, Trash2 } from 'lucide-react';
 import type { ProcurementItem, Project } from '@/types';
 import { computeOverallProgress, fmtDate } from '@/lib/procurement';
 import { Progress } from '@/components/ui/progress';
@@ -81,7 +81,6 @@ export default function ProjectHero({
 
         <div className="mt-auto flex gap-2 pt-6">
           <Button className="flex-1" variant="outline" onClick={onGoOverview}>
-            <ListChecks className="size-4" />
             View Overview
           </Button>
           <Tooltip>
