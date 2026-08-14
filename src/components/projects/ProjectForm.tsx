@@ -25,10 +25,8 @@ export default function ProjectForm({
         </p>
         <h2 className="mt-2 text-xl font-semibold tracking-tight">Create a new project</h2>
 
-        {/* Spread the groups down the card so it does not end in dead space
-            next to the taller hero beside it. */}
         <form
-          className="mt-5 flex flex-1 flex-col justify-between gap-5"
+          className="mt-6 flex flex-1 flex-col gap-4"
           onSubmit={e => { e.preventDefault(); onSubmit(); }}
         >
           <div className="grid gap-2">
@@ -86,7 +84,7 @@ export default function ProjectForm({
             </div>
           </div>
 
-          <Button type="submit" className="w-full">Create project</Button>
+          <Button type="submit" className="mt-auto w-full">Create project</Button>
         </form>
       </CardContent>
     </Card>

@@ -4,7 +4,6 @@ import { computeOverallProgress, fmtDate } from '@/lib/procurement';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -54,9 +53,8 @@ export default function ProjectHero({
           {project.name}
         </h2>
 
-        <Separator className="my-4" />
-
-        <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+        {/* Spacing alone separates the groups — no rules needed. */}
+        <dl className="mt-5 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
           {meta.map(f => (
             <div key={f.label} className="contents">
               <dt className="text-muted-foreground">{f.label}</dt>
@@ -67,9 +65,7 @@ export default function ProjectHero({
           ))}
         </dl>
 
-        <Separator className="my-4" />
-
-        <div>
+        <div className="mt-6">
           <div className="mb-2 flex items-baseline justify-between">
             <span className="text-sm text-muted-foreground">Overall progress</span>
             <span className="text-lg font-semibold tabular">{progress}%</span>
