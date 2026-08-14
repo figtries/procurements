@@ -458,9 +458,9 @@ export default function DashboardPage({
             <Badge variant="secondary" className="tabular">{vendors.length} vendors</Badge>
           </CardAction>
         </CardHeader>
-        <CardContent className="pt-(--card-spacing)">
+        <CardContent>
           <div className="overflow-x-auto">
-            <Table>
+            <Table className="[&_th]:h-9">
               <TableHeader>
                 <TableRow>
                   <TableHead className="min-w-44">Vendor</TableHead>
