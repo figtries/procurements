@@ -19,7 +19,6 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface OverviewPageProps {
-  projectName: string;
   projectItems: ProcurementItem[];
   filteredItems: ProcurementItem[];
   grouped: Array<{ key: string; label: string; items: ProcurementItem[] }>;
@@ -152,7 +151,7 @@ function WarnBanners({
 }
 
 export default function OverviewPage({
-  projectName, projectItems, filteredItems, grouped, groupBy, search,
+  projectItems, filteredItems, grouped, groupBy, search,
   filterStatus, filterDisc, filterVendor, hasFilters, uniqueDiscs, uniqueVendors,
   hasProject, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
   onClearFilters, onGroupBy, onImport, onExport, exporting, onAddItem, onOpenDetail,
@@ -180,7 +179,6 @@ export default function OverviewPage({
     <div>
       {/* Header */}
       <div className="mb-6">
-        {projectName && <p className="mb-2 text-sm text-muted-foreground">{projectName}</p>}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Procurement Overview</h1>

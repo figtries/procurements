@@ -413,7 +413,6 @@ export default function ProcurementApp() {
 
               {page === 'overview' && (
                 <OverviewPage
-                  projectName={activeProject?.name ?? ''}
                   projectItems={projectItems}
                   filteredItems={filteredItems}
                   grouped={grouped}
