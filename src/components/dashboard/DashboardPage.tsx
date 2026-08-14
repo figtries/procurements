@@ -91,11 +91,8 @@ export default function DashboardPage({
   const behind       = deviation.deviation < 0;
 
   const header = (
-    <div className="mb-6 flex items-center gap-3">
+    <div className="mb-6">
       <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
-      {project?.revision ? (
-        <Badge variant="outline" className="tabular">rev.{project.revision}</Badge>
-      ) : null}
     </div>
   );
 

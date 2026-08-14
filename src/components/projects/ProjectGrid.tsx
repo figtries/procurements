@@ -29,7 +29,7 @@ export default function ProjectGrid({
   }
 
   return (
-    <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {projects.map(proj => {
         const isActive = activeProjectId === proj.id;
         const itemCount = items.filter(i => i.projectId === proj.id).length;
@@ -38,23 +38,27 @@ export default function ProjectGrid({
           <div
             key={proj.id}
             className={cn(
-              'flex items-center gap-3 rounded-xl bg-card px-3.5 py-3 ring-1 transition',
-              isActive ? 'bg-accent ring-primary/40' : 'ring-foreground/10 hover:ring-foreground/25',
+              'flex items-center gap-4 rounded-xl bg-card p-4 ring-1 transition-shadow duration-200',
+              isActive
+                ? 'bg-accent shadow-sm ring-primary/40'
+                : 'ring-foreground/10 hover:shadow-sm hover:ring-foreground/25',
             )}
           >
             <button
               onClick={() => onSelect(proj.id)}
-              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              className="flex min-w-0 flex-1 items-center gap-4 text-left"
             >
               <span className={cn(
-                'flex size-9 shrink-0 items-center justify-center rounded-lg',
+                'flex size-12 shrink-0 items-center justify-center rounded-xl',
                 isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
               )}>
-                <Folder className="size-4" />
+                <Folder className="size-5" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">{proj.name}</span>
-                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                <span className="block truncate text-base font-semibold tracking-tight">
+                  {proj.name}
+                </span>
+                <span className="mt-1 block truncate text-sm text-muted-foreground">
                   {proj.client || 'No client'} · {itemCount} item{itemCount === 1 ? '' : 's'}
                 </span>
               </span>
@@ -64,7 +68,7 @@ export default function ProjectGrid({
               variant="ghost"
               size="icon"
               aria-label={`Delete project ${proj.name}`}
-              className="size-8 shrink-0 text-muted-foreground hover:bg-late-bg hover:text-late-fg"
+              className="size-9 shrink-0 text-muted-foreground hover:bg-late-bg hover:text-late-fg"
               onClick={() => onDelete(proj)}
             >
               <X className="size-4" />
