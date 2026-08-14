@@ -5,8 +5,10 @@ import { DUMMY_PROJECT, DUMMY_ITEMS } from '@/lib/dummyData';
 
 import BrandLogo from '@/components/BrandLogo';
 import DeleteModal from '@/components/DeleteModal';
+import ImportModal from '@/components/ImportModal';
 import ItemFormModal from '@/components/ItemFormModal';
 import type { ItemFormState } from '@/components/ItemFormModal';
+import DashboardPage from '@/components/dashboard/DashboardPage';
 import OverviewPage from '@/components/dashboard/OverviewPage';
 import ItemDetail from '@/components/dashboard/ItemDetail';
 import ProjectsPage from '@/components/projects/ProjectsPage';
@@ -20,8 +22,11 @@ import {
   saveItems,
   saveProjects,
 } from '@/lib/store';
+import { exportWorkbook } from '@/lib/excelExport';
 import { deriveStatus, STATUS_LABELS } from '@/lib/utils';
-import type { GroupBy, ItemStatus, MilestoneEntry, PageName, ProcurementItem, Project } from '@/types';
+import type {
+  GroupBy, ImportedRow, ItemStatus, MilestoneEntry, PageName, ProcurementItem, Project,
+} from '@/types';
 
 /* ─────────────── helpers ─────────────── */
 function buildMilestone(plan: string, fc: string, act: string, note: string): MilestoneEntry {
@@ -30,7 +35,7 @@ function buildMilestone(plan: string, fc: string, act: string, note: string): Mi
 
 /* ─────────────── MAIN PAGE ─────────────── */
 export default function ProcurementApp() {
-  const [page, setPage] = useState<PageName>('overview');
+  const [page, setPage] = useState<PageName>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   /* ── Data state (Lazily initialized to avoid cascading renders) ── */
@@ -71,6 +76,10 @@ export default function ProcurementApp() {
   /* ── Item form modal ── */
   const [formOpen, setFormOpen]       = useState(false);
   const [editingItem, setEditingItem] = useState<ProcurementItem | null>(null);
+
+  /* ── Excel import / export ── */
+  const [importOpen, setImportOpen] = useState(false);
+  const [exporting, setExporting]   = useState(false);
 
   /* ── Delete modal ── */
   const [deleteOpen, setDeleteOpen]     = useState(false);
@@ -184,6 +193,9 @@ export default function ProcurementApp() {
       poNo: form.poNo.trim(),
       poDate: form.poDate,
       statusNote: form.statusNote.trim(),
+      readinessDoc: Math.max(0, Math.min(1, (Number(form.readinessDoc) || 0) / 100)),
+      doNo: form.doNo.trim(),
+      termOfPayment: form.termOfPayment.trim(),
       fat: buildMilestone(form.fatPlan, form.fatFc, form.fatAct, form.fatNote),
       rts: buildMilestone(form.rtsPlan, form.rtsFc, form.rtsAct, form.rtsNote),
       mos: buildMilestone(form.mosPlan, form.mosFc, form.mosAct, form.mosNote),
@@ -207,6 +219,79 @@ export default function ProcurementApp() {
       showToast('Item added.');
     }
     closeItemForm();
+  }
+
+  /* ─── Excel ─── */
+
+  /** Apply reviewed rows: update items matched by PO + description, insert the rest. */
+  function handleImportConfirm(rows: ImportedRow[]) {
+    const projectId = activeProject?.id ?? '';
+    const byId = new Map(items.map(i => [i.id, i]));
+    let updated = 0, inserted = 0;
+
+    for (const row of rows) {
+      const base = {
+        projectId,
+        desc: row.desc,
+        discipline: row.discipline,
+        qty: row.qty,
+        unit: row.unit,
+        vendor: row.vendor,
+        brand: row.brand,
+        delivery: row.delivery,
+        poNo: row.poNo,
+        poDate: row.poDate,
+        statusNote: row.statusNote,
+        readinessDoc: row.readinessDoc,
+        doNo: row.doNo,
+        termOfPayment: row.termOfPayment,
+        fat: row.fat,
+        rts: row.rts,
+        mos: row.mos,
+      };
+      const derived = deriveStatus(base as ProcurementItem);
+
+      if (row.matchesItemId && byId.has(row.matchesItemId)) {
+        const existing = byId.get(row.matchesItemId)!;
+        byId.set(existing.id, { ...existing, ...base, ...derived });
+        updated++;
+      } else {
+        const item: ProcurementItem = {
+          ...base, id: genId(), ...derived, createdAt: new Date().toISOString(),
+        };
+        byId.set(item.id, item);
+        inserted++;
+      }
+    }
+
+    const next = Array.from(byId.values());
+    setItems(next);
+    saveItems(next);
+    setImportOpen(false);
+    showToast(
+      `Import selesai — ${inserted} item baru${updated ? `, ${updated} diperbarui` : ''}.`,
+    );
+  }
+
+  /** Write the workbook and bump the project revision so the sheet header stays in step. */
+  async function handleExport() {
+    if (!projectItems.length) { showToast('Belum ada item untuk di-export.'); return; }
+    setExporting(true);
+    try {
+      const { revision } = await exportWorkbook(activeProject, projectItems);
+      if (activeProject) {
+        const nextProjects = projects.map(p =>
+          p.id === activeProject.id ? { ...p, revision } : p,
+        );
+        setProjects(nextProjects);
+        saveProjects(nextProjects);
+      }
+      showToast(`Excel rev.${revision} berhasil diunduh.`);
+    } catch (err) {
+      showToast(`Export gagal: ${(err as Error).message}`);
+    } finally {
+      setExporting(false);
+    }
   }
 
   function confirmDeleteItem(item: ProcurementItem) {
@@ -286,6 +371,12 @@ export default function ProcurementApp() {
           <BrandLogo />
           <div className="nav-section">Menu</div>
           <button
+            className={`nav-btn${page === 'dashboard' ? ' active' : ''}`}
+            onClick={() => nav('dashboard')}
+          >
+            <span className="dot" /> Dashboard
+          </button>
+          <button
             className={`nav-btn${page === 'overview' || page === 'itemDetail' ? ' active' : ''}`}
             onClick={() => nav('overview')}
           >
@@ -297,10 +388,30 @@ export default function ProcurementApp() {
           >
             <span className="dot" /> Projects
           </button>
+
+          <div className="nav-section">Data</div>
+          <button className="nav-btn" onClick={() => { setImportOpen(true); setSidebarOpen(false); }}>
+            <span className="dot" /> Import Excel
+          </button>
+          <button className="nav-btn" onClick={() => { handleExport(); setSidebarOpen(false); }} disabled={exporting}>
+            <span className="dot" /> {exporting ? 'Menyiapkan…' : 'Export Excel'}
+          </button>
         </aside>
 
         {/* ── Main ── */}
         <main>
+          {/* Dashboard page */}
+          {page === 'dashboard' && (
+            <DashboardPage
+              project={activeProject}
+              items={projectItems}
+              onOpenItem={item => { setDetailItem(item); setPage('itemDetail'); }}
+              onImport={() => setImportOpen(true)}
+              onExport={handleExport}
+              exporting={exporting}
+            />
+          )}
+
           {/* Projects page */}
           {page === 'projects' && (
             <ProjectsPage
@@ -359,6 +470,14 @@ export default function ProcurementApp() {
           )}
         </main>
       </div>
+
+      {/* Excel import modal */}
+      <ImportModal
+        open={importOpen}
+        existingItems={projectItems}
+        onClose={() => setImportOpen(false)}
+        onConfirm={handleImportConfirm}
+      />
 
       {/* Item form modal */}
       <ItemFormModal

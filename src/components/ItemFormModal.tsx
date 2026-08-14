@@ -16,6 +16,10 @@ export interface ItemFormState {
   poNo: string;
   poDate: string;
   statusNote: string;
+  /** Held as a percentage string (0–100) so the number input behaves predictably. */
+  readinessDoc: string;
+  doNo: string;
+  termOfPayment: string;
   fatPlan: string; fatFc: string; fatAct: string; fatNote: string;
   rtsPlan: string; rtsFc: string; rtsAct: string; rtsNote: string;
   mosPlan: string; mosFc: string; mosAct: string; mosNote: string;
@@ -26,6 +30,7 @@ export function emptyFormState(): ItemFormState {
     desc: '', discipline: '', qty: '1', unit: '',
     vendor: '', brand: '', delivery: '',
     poNo: '', poDate: '', statusNote: '',
+    readinessDoc: '0', doNo: '', termOfPayment: '',
     fatPlan: '', fatFc: '', fatAct: '', fatNote: '',
     rtsPlan: '', rtsFc: '', rtsAct: '', rtsNote: '',
     mosPlan: '', mosFc: '', mosAct: '', mosNote: '',
@@ -38,6 +43,8 @@ export function itemToForm(item: ProcurementItem): ItemFormState {
     qty: String(item.qty), unit: item.unit,
     vendor: item.vendor, brand: item.brand, delivery: item.delivery,
     poNo: item.poNo, poDate: item.poDate, statusNote: item.statusNote,
+    readinessDoc: String(Math.round((item.readinessDoc || 0) * 100)),
+    doNo: item.doNo, termOfPayment: item.termOfPayment,
     fatPlan: item.fat.plan,  fatFc: item.fat.forecast,  fatAct: item.fat.actual,  fatNote: item.fat.note,
     rtsPlan: item.rts.plan,  rtsFc: item.rts.forecast,  rtsAct: item.rts.actual,  rtsNote: item.rts.note,
     mosPlan: item.mos.plan,  mosFc: item.mos.forecast,  mosAct: item.mos.actual,  mosNote: item.mos.note,
@@ -90,6 +97,10 @@ export default function ItemFormModal({
     if (!form.poNo.trim())   errs.poNo        = 'PO number is required';
     if (!form.poDate)        errs.poDate      = 'PO date is required';
     if (!form.qty || Number(form.qty) <= 0) errs.qty = 'Enter a valid quantity';
+    const readiness = Number(form.readinessDoc);
+    if (form.readinessDoc !== '' && (isNaN(readiness) || readiness < 0 || readiness > 100)) {
+      errs.readinessDoc = 'Isi antara 0 dan 100';
+    }
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -208,6 +219,45 @@ export default function ItemFormModal({
                 {errors.poDate && <div className="field-error-msg">{errors.poDate}</div>}
               </div>
             </div>
+          </div>
+
+          <div className="field">
+            <div className="field-row">
+              <div>
+                <label className="flabel">
+                  Document readiness <span className="opt">(0–100%)</span>
+                </label>
+                <input
+                  className={`finput${errors.readinessDoc ? ' field-error' : ''}`}
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={form.readinessDoc}
+                  onChange={set('readinessDoc')}
+                  placeholder="0"
+                />
+                {errors.readinessDoc && <div className="field-error-msg">{errors.readinessDoc}</div>}
+              </div>
+              <div>
+                <label className="flabel">No. DO <span className="opt">(optional)</span></label>
+                <input
+                  className="finput"
+                  value={form.doNo}
+                  onChange={set('doNo')}
+                  placeholder="e.g. 007/SP/DO/CPPG/V/26"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="field">
+            <label className="flabel">Term of payment <span className="opt">(optional)</span></label>
+            <textarea
+              className="finput"
+              value={form.termOfPayment}
+              onChange={set('termOfPayment')}
+              placeholder="e.g. 30% down payment · 70% after delivery"
+            />
           </div>
 
           <div className="field">

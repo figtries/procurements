@@ -15,6 +15,11 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
   const isLate = item.status === 'late';
   const isAtRisk = item.status === 'atrisk';
 
+  const readinessPct = Math.round((item.readinessDoc || 0) * 100);
+  const readinessTone = readinessPct < 50 ? 'low' : readinessPct < 90 ? 'mid' : '';
+  /** Goods arrived but the delivery order was never recorded. */
+  const needsDo = !!item.mos.actual && !item.doNo.trim();
+
   return (
     <div>
       <button className="back-btn" onClick={onBack}>← Back to Overview</button>
@@ -64,6 +69,20 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
           </div>
         </div>
 
+        {/* Document readiness — the 0–1 figure client sheets track per item */}
+        <div className="readiness-block">
+          <div className="dp-top">
+            <div className="dp-label">
+              Document Readiness
+              <span className="dp-hint">Kelengkapan dokumen vendor</span>
+            </div>
+            <span className={`dp-pct${readinessTone ? ` ${readinessTone}` : ''}`}>{readinessPct}%</span>
+          </div>
+          <div className="dp-bar">
+            <div className={`dp-fill${readinessTone ? ` ${readinessTone}` : ''}`} style={{ width: `${readinessPct}%` }} />
+          </div>
+        </div>
+
         <div className="detail-grid">
           <div><div className="dfield-label">Supplier / Vendor</div><div className="dfield-value">{item.vendor || '—'}</div></div>
           <div><div className="dfield-label">Brand</div><div className="dfield-value">{item.brand || '—'}</div></div>
@@ -71,7 +90,45 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
           <div><div className="dfield-label">Delivery Term</div><div className="dfield-value">{item.delivery || '—'}</div></div>
           <div><div className="dfield-label">PO Number</div><div className="dfield-value">{item.poNo || '—'}</div></div>
           <div><div className="dfield-label">PO Date</div><div className="dfield-value">{fmtDate(item.poDate)}</div></div>
+          <div>
+            <div className="dfield-label">No. DO / Delivery Order</div>
+            <div className={`dfield-value${item.doNo ? '' : ' muted'}`}>{item.doNo || '—'}</div>
+          </div>
+          <div>
+            <div className="dfield-label">Material On Site</div>
+            <div className="dfield-value">{item.mos.actual ? fmtDate(item.mos.actual) : 'Belum tiba'}</div>
+          </div>
         </div>
+      </div>
+
+      {/* Delivery Order — the paperwork that proves the goods actually arrived */}
+      <div className="section-card">
+        <div className="section-title">Delivery Order</div>
+        <div className="section-sub">Bukti pengiriman dari vendor</div>
+
+        {item.doNo ? (
+          <div className="do-list">
+            {item.doNo.split(/[\n;]+|\s{2,}|&/).map(s => s.trim()).filter(Boolean).map((no, i) => (
+              <div className="do-chip" key={`${no}-${i}`}>
+                <span className="do-ic">📦</span>
+                <span className="do-no">{no}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className={`do-empty${needsDo ? ' warn' : ''}`}>
+            {needsDo
+              ? 'Material tercatat sudah on site, tapi nomor DO belum diisi. Lengkapi lewat tombol Edit.'
+              : 'Belum ada nomor DO. Akan terisi setelah vendor mengirim surat jalan.'}
+          </div>
+        )}
+
+        {item.termOfPayment && (
+          <>
+            <div className="section-title do-term-head">Term of Payment</div>
+            <p className="do-term">{item.termOfPayment}</p>
+          </>
+        )}
       </div>
 
       {item.statusNote && (

@@ -1,4 +1,16 @@
-import type { Project, ProcurementItem } from '@/types';
+import type { ProcurementItem, Project } from '@/types';
+import { deriveStatus } from './utils';
+
+/* Seed data for a fresh install.
+   Dates are generated relative to today so the demo keeps reading sensibly
+   instead of drifting into "everything is two years late". */
+
+/** ISO date `offset` days from today. */
+function d(offset: number): string {
+  const dt = new Date();
+  dt.setDate(dt.getDate() + offset);
+  return dt.toISOString().slice(0, 10);
+}
 
 export const DUMMY_PROJECT: Project = {
   id: 'demo-proj-001',
@@ -7,107 +19,132 @@ export const DUMMY_PROJECT: Project = {
   location: 'Sulawesi Tengah',
   pic: 'Budi Santoso',
   contractNo: 'CTR-2024-0088',
-  handover: '2025-09-30',
-  createdAt: '2024-01-10T08:00:00.000Z',
+  handover: d(150),
+  createdAt: new Date(Date.now() - 300 * 86400000).toISOString(),
+  revision: 6,
 };
 
 const pid = DUMMY_PROJECT.id;
 
-export const DUMMY_ITEMS: ProcurementItem[] = [
+type SeedItem = Omit<ProcurementItem, 'status' | 'progress'>;
+
+const SEED: SeedItem[] = [
   {
     id: 'item-001', projectId: pid,
     desc: 'Microturbine Generator Package',
     discipline: 'Mechanical', qty: 2, unit: 'Set',
     vendor: 'PT. Fajar Mas Murni', brand: 'Flex Turbines',
-    delivery: 'DDP SKN', poNo: 'PO-2401888', poDate: '2024-02-01',
-    statusNote: 'On progress fabrication — ETA FAT Q3 2024.',
-    fat: { plan: '2024-07-15', forecast: '2024-07-28', actual: '2024-07-30', note: 'FAT completed with minor punch list.' },
-    rts: { plan: '2024-08-10', forecast: '2024-08-10', actual: '2024-08-12', note: '' },
-    mos: { plan: '2024-09-01', forecast: '2024-09-15', actual: '', note: 'Waiting customs clearance.' },
-    status: 'atrisk', progress: 75, createdAt: '2024-02-01T09:00:00.000Z',
+    delivery: 'DDP SKN', poNo: 'PO-2401888', poDate: d(-240),
+    readinessDoc: 0.85, doNo: '',
+    termOfPayment: '30% down payment · 70% after delivery to site',
+    statusNote: 'Unit sudah lolos FAT, menunggu jadwal pengapalan dari Batam.',
+    fat: { plan: d(-95),  forecast: d(-95), actual: d(-92), note: 'FAT selesai dengan minor punch list.' },
+    rts: { plan: d(-40),  forecast: d(-40), actual: d(-36), note: '' },
+    mos: { plan: d(9),    forecast: d(19),  actual: '',     note: 'Menunggu clearance bea cukai.' },
+    createdAt: new Date(Date.now() - 240 * 86400000).toISOString(),
   },
   {
     id: 'item-002', projectId: pid,
     desc: 'Gas Chromatograph Analyzer',
     discipline: 'Instrument', qty: 1, unit: 'Unit',
     vendor: 'PT. Inti Instrumen', brand: 'Yokogawa',
-    delivery: 'CIF Makassar', poNo: 'PO-2401992', poDate: '2024-03-05',
+    delivery: 'CIF Makassar', poNo: 'PO-2401992', poDate: d(-215),
+    readinessDoc: 1, doNo: '012/DO/INI/VI/26',
+    termOfPayment: '50% down payment · 50% after FAT',
     statusNote: '',
-    fat: { plan: '2024-08-20', forecast: '2024-08-20', actual: '2024-08-18', note: '' },
-    rts: { plan: '2024-09-05', forecast: '2024-09-05', actual: '2024-09-05', note: '' },
-    mos: { plan: '2024-09-25', forecast: '2024-09-25', actual: '2024-09-24', note: '' },
-    status: 'onsite', progress: 100, createdAt: '2024-03-05T09:00:00.000Z',
+    fat: { plan: d(-120), forecast: d(-120), actual: d(-122), note: '' },
+    rts: { plan: d(-88),  forecast: d(-88),  actual: d(-88),  note: '' },
+    mos: { plan: d(-62),  forecast: d(-62),  actual: d(-63),  note: '' },
+    createdAt: new Date(Date.now() - 215 * 86400000).toISOString(),
   },
   {
     id: 'item-003', projectId: pid,
     desc: 'MCC Panel & Motor Control',
     discipline: 'Electrical', qty: 1, unit: 'Lot',
     vendor: 'PT. Schneider Electrics Indonesia', brand: 'Schneider Electric',
-    delivery: 'Ex-works Jakarta', poNo: 'PO-2402100', poDate: '2024-03-20',
-    statusNote: 'FAB in progress di Cikarang.',
-    fat: { plan: '2024-09-10', forecast: '2024-09-10', actual: '', note: '' },
-    rts: { plan: '2024-10-01', forecast: '', actual: '', note: '' },
-    mos: { plan: '2024-10-20', forecast: '', actual: '', note: '' },
-    status: 'ontrack', progress: 25, createdAt: '2024-03-20T09:00:00.000Z',
+    delivery: 'Ex-works Jakarta', poNo: 'PO-2402100', poDate: d(-200),
+    readinessDoc: 0.7, doNo: '',
+    termOfPayment: '30% down payment · 60% progress · 10% retensi',
+    statusNote: 'Fabrikasi di Cikarang, wiring 70%.',
+    fat: { plan: d(26), forecast: d(26), actual: '', note: '' },
+    rts: { plan: d(47), forecast: '',    actual: '', note: '' },
+    mos: { plan: d(66), forecast: '',    actual: '', note: '' },
+    createdAt: new Date(Date.now() - 200 * 86400000).toISOString(),
   },
   {
     id: 'item-004', projectId: pid,
     desc: 'Process Piping & Fittings',
     discipline: 'Piping', qty: 1, unit: 'Lot',
     vendor: 'PT. Valindo Metalindo', brand: '',
-    delivery: 'DDP SKN', poNo: 'PO-2402215', poDate: '2024-04-01',
+    delivery: 'DDP SKN', poNo: 'PO-2402215', poDate: d(-185),
+    readinessDoc: 1, doNo: '045/DO/VM/V/26',
+    termOfPayment: '100% after delivery',
     statusNote: 'Material sudah tiba di site, instalasi 60%.',
-    fat: { plan: '2024-06-01', forecast: '2024-06-01', actual: '2024-05-30', note: '' },
-    rts: { plan: '2024-06-20', forecast: '2024-06-20', actual: '2024-06-22', note: '' },
-    mos: { plan: '2024-07-10', forecast: '2024-07-10', actual: '2024-07-09', note: '' },
-    status: 'onsite', progress: 100, createdAt: '2024-04-01T09:00:00.000Z',
+    fat: { plan: d(-135), forecast: d(-135), actual: d(-137), note: '' },
+    rts: { plan: d(-112), forecast: d(-112), actual: d(-110), note: '' },
+    mos: { plan: d(-90),  forecast: d(-90),  actual: d(-91),  note: '' },
+    createdAt: new Date(Date.now() - 185 * 86400000).toISOString(),
   },
   {
     id: 'item-005', projectId: pid,
     desc: 'Safety Instrumented System (SIS)',
     discipline: 'Instrument', qty: 1, unit: 'Set',
     vendor: 'PT. Honeywell Indonesia', brand: 'Honeywell',
-    delivery: 'DDP SKN', poNo: 'PO-2402330', poDate: '2024-04-15',
-    statusNote: 'FAT overdue — vendor minta reschedule.',
-    fat: { plan: '2024-07-30', forecast: '2024-09-01', actual: '', note: 'Vendor site belum ready.' },
-    rts: { plan: '2024-08-20', forecast: '', actual: '', note: '' },
-    mos: { plan: '2024-09-10', forecast: '', actual: '', note: '' },
-    status: 'late', progress: 15, createdAt: '2024-04-15T09:00:00.000Z',
+    delivery: 'DDP SKN', poNo: 'PO-2402330', poDate: d(-170),
+    readinessDoc: 0.45, doNo: '',
+    termOfPayment: '40% down payment · 60% after FAT',
+    statusNote: 'FAT tertunda — vendor minta reschedule, belum ada tanggal pengganti.',
+    fat: { plan: d(-30), forecast: d(-8), actual: '', note: 'Vendor site belum ready.' },
+    rts: { plan: d(-5),  forecast: '',    actual: '', note: '' },
+    mos: { plan: d(20),  forecast: '',    actual: '', note: '' },
+    createdAt: new Date(Date.now() - 170 * 86400000).toISOString(),
   },
   {
     id: 'item-006', projectId: pid,
     desc: 'HVAC Split System & Ducting',
     discipline: 'Mechanical', qty: 4, unit: 'Unit',
     vendor: 'PT. Daikin Airconditioning Indonesia', brand: 'Daikin',
-    delivery: 'DDP SKN', poNo: 'PO-2402450', poDate: '2024-05-01',
+    delivery: 'DDP SKN', poNo: 'PO-2402450', poDate: d(-155),
+    readinessDoc: 1, doNo: '',
+    termOfPayment: '100% after delivery',
     statusNote: '',
-    fat: { plan: '2024-08-15', forecast: '2024-08-15', actual: '2024-08-14', note: '' },
-    rts: { plan: '2024-09-01', forecast: '2024-09-01', actual: '2024-09-02', note: '' },
-    mos: { plan: '2024-09-20', forecast: '2024-09-20', actual: '2024-09-19', note: '' },
-    status: 'onsite', progress: 100, createdAt: '2024-05-01T09:00:00.000Z',
+    fat: { plan: d(-100), forecast: d(-100), actual: d(-101), note: '' },
+    rts: { plan: d(-75),  forecast: d(-75),  actual: d(-74),  note: '' },
+    mos: { plan: d(-50),  forecast: d(-50),  actual: d(-51),  note: '' },
+    createdAt: new Date(Date.now() - 155 * 86400000).toISOString(),
   },
   {
     id: 'item-007', projectId: pid,
     desc: 'Foundation & Civil Structural Works',
     discipline: 'Civil', qty: 1, unit: 'Lot',
     vendor: 'PT. Wijaya Karya (Wika)', brand: '',
-    delivery: 'Lump Sum', poNo: 'PO-2402560', poDate: '2024-05-10',
-    statusNote: 'Pekerjaan pondasi sudah selesai, saat ini pengerjaan struktur baja.',
-    fat: { plan: '', forecast: '', actual: '', note: '' },
-    rts: { plan: '', forecast: '', actual: '', note: '' },
-    mos: { plan: '2024-11-30', forecast: '', actual: '', note: '' },
-    status: 'ontrack', progress: 40, createdAt: '2024-05-10T09:00:00.000Z',
+    delivery: 'Lump Sum', poNo: 'PO-2402560', poDate: d(-145),
+    readinessDoc: 0.9, doNo: '',
+    termOfPayment: 'Progress payment bulanan sesuai berita acara',
+    statusNote: 'Pondasi selesai, saat ini pengerjaan struktur baja.',
+    fat: { plan: '',      forecast: '', actual: '', note: '' },
+    rts: { plan: '',      forecast: '', actual: '', note: '' },
+    mos: { plan: d(104),  forecast: '', actual: '', note: '' },
+    createdAt: new Date(Date.now() - 145 * 86400000).toISOString(),
   },
   {
     id: 'item-008', projectId: pid,
     desc: 'Pressure Vessel & Storage Tank',
     discipline: 'Mechanical', qty: 3, unit: 'Unit',
     vendor: 'PT. Rekayasa Industri', brand: '',
-    delivery: 'DDP SKN', poNo: 'PO-2402700', poDate: '2024-06-01',
-    statusNote: 'Fabrikasi di tahap final, FAT dijadwalkan bulan ini.',
-    fat: { plan: '2024-09-20', forecast: '2024-09-20', actual: '', note: '' },
-    rts: { plan: '2024-10-10', forecast: '', actual: '', note: '' },
-    mos: { plan: '2024-11-01', forecast: '', actual: '', note: '' },
-    status: 'ontrack', progress: 20, createdAt: '2024-06-01T09:00:00.000Z',
+    delivery: 'DDP SKN', poNo: 'PO-2402700', poDate: d(-130),
+    readinessDoc: 0.95, doNo: '',
+    termOfPayment: '25% engineering doc · 50% material · 25% delivery',
+    statusNote: 'Fabrikasi tahap final, FAT dijadwalkan bulan ini.',
+    fat: { plan: d(11), forecast: d(11), actual: '', note: '' },
+    rts: { plan: d(32), forecast: '',    actual: '', note: '' },
+    mos: { plan: d(54), forecast: '',    actual: '', note: '' },
+    createdAt: new Date(Date.now() - 130 * 86400000).toISOString(),
   },
 ];
+
+/** Status and progress come from the same rules the app applies to real items. */
+export const DUMMY_ITEMS: ProcurementItem[] = SEED.map(item => ({
+  ...item,
+  ...deriveStatus(item as ProcurementItem),
+}));

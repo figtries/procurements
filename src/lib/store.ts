@@ -18,10 +18,25 @@ export function saveProjects(projects: Project[]): void {
   localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
 }
 
+/**
+ * Fill in fields added after an item was first saved, so records written by
+ * older builds keep working instead of rendering as `undefined`.
+ */
+function migrateItem(raw: Partial<ProcurementItem>): ProcurementItem {
+  return {
+    ...raw,
+    readinessDoc: typeof raw.readinessDoc === 'number' ? raw.readinessDoc : 0,
+    doNo: raw.doNo ?? '',
+    termOfPayment: raw.termOfPayment ?? '',
+  } as ProcurementItem;
+}
+
 export function loadItems(): ProcurementItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(localStorage.getItem(ITEMS_KEY) || '[]');
+    const parsed = JSON.parse(localStorage.getItem(ITEMS_KEY) || '[]');
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(migrateItem);
   } catch {
     return [];
   }
