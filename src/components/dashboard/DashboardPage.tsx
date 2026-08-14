@@ -269,19 +269,29 @@ export default function DashboardPage({
           <CardHeader>
             <CardTitle>Breakdown by discipline</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
+          {/* Same two-line rhythm as the milestone card beside it: a labelled
+              row, then its bar — which also lets the rows fill the card. */}
+          <CardContent className="flex h-full flex-col">
+            <div className="flex flex-1 flex-col justify-evenly gap-3">
               {disciplines.map(d => {
                 const style = getDisciplineStyle(d.discipline);
                 const w = (n: number) => (d.total ? (n / d.total) * 100 : 0);
                 return (
-                  <div key={d.discipline} className="grid grid-cols-[5.75rem_minmax(0,1fr)_2rem] items-center gap-2.5">
-                    <span
-                      className="truncate rounded px-2 py-0.5 text-center text-[11px] font-semibold"
-                      style={{ background: style.bg, color: style.color }}
-                    >
-                      {d.discipline}
-                    </span>
+                  <div key={d.discipline} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span
+                        className="truncate rounded px-2 py-0.5 text-[11px] font-semibold"
+                        style={{ background: style.bg, color: style.color }}
+                      >
+                        {d.discipline}
+                      </span>
+                      <span className="shrink-0 text-sm font-semibold tabular">
+                        {d.total}
+                        <span className="font-normal text-muted-foreground">
+                          {' '}item{d.total === 1 ? '' : 's'}
+                        </span>
+                      </span>
+                    </div>
                     <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
                       <div className="bg-onsite"   style={{ width: `${w(d.counts.onsite)}%` }} />
                       <div className="bg-ontrack"  style={{ width: `${w(d.counts.ontrack)}%` }} />
@@ -289,15 +299,12 @@ export default function DashboardPage({
                       <div className="bg-late"     style={{ width: `${w(d.counts.late)}%` }} />
                       <div className="bg-planning" style={{ width: `${w(d.counts.planning)}%` }} />
                     </div>
-                    <span className="text-right text-xs font-semibold text-muted-foreground tabular">{d.total}</span>
                   </div>
                 );
               })}
             </div>
 
-            <Separator className="my-4" />
-
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
               <Key swatch="bg-onsite" label="On Site" />
               <Key swatch="bg-ontrack" label="On Track" />
               <Key swatch="bg-atrisk" label="At Risk" />
