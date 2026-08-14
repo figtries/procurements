@@ -1,7 +1,10 @@
 'use client';
 
 import { ViewTransition, useTransition } from 'react';
-import { CheckCircle2, Clock, PackageSearch, Plus, Search, TriangleAlert, X } from 'lucide-react';
+import {
+  ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Clock, PackageSearch, Plus, Search,
+  TriangleAlert, X,
+} from 'lucide-react';
 import type { GroupBy, ItemStatus, ProcurementItem } from '@/types';
 import { STATUS_LABELS, computeOverallProgress, getDisciplineStyle } from '@/lib/procurement';
 import StatTile from './StatTile';
@@ -35,7 +38,9 @@ interface OverviewPageProps {
   onFilterVendor: (v: string) => void;
   onClearFilters: () => void;
   onGroupBy: (g: GroupBy) => void;
-  onAddProject: () => void;
+  onImport: () => void;
+  onExport: () => void;
+  exporting: boolean;
   onAddItem: () => void;
   onOpenDetail: (item: ProcurementItem) => void;
 }
@@ -150,7 +155,7 @@ export default function OverviewPage({
   projectName, projectItems, filteredItems, grouped, groupBy, search,
   filterStatus, filterDisc, filterVendor, hasFilters, uniqueDiscs, uniqueVendors,
   hasProject, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
-  onClearFilters, onGroupBy, onAddProject, onAddItem, onOpenDetail,
+  onClearFilters, onGroupBy, onImport, onExport, exporting, onAddItem, onOpenDetail,
 }: OverviewPageProps) {
   /** Filtering runs in a transition so the list crossfades instead of snapping. */
   const [, startFilter] = useTransition();
@@ -180,10 +185,14 @@ export default function OverviewPage({
           <div>
             <h1 className="text-3xl font-semibold tracking-tight">Procurement Overview</h1>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <Button variant="outline" onClick={onAddProject}>
-              <Plus className="size-4" />
-              Project
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button variant="outline" onClick={onImport}>
+              <ArrowDownToLine className="size-4" />
+              Import Excel
+            </Button>
+            <Button variant="outline" onClick={onExport} disabled={!total || exporting}>
+              <ArrowUpFromLine className="size-4" />
+              {exporting ? 'Preparing…' : 'Export Excel'}
             </Button>
             <Button onClick={onAddItem}>
               <Plus className="size-4" />

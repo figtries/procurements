@@ -5,6 +5,7 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface ProjectHeroProps {
@@ -34,53 +35,75 @@ export default function ProjectHero({
   const late      = projItems.filter(i => i.status === 'late').length;
   const atrisk    = projItems.filter(i => i.status === 'atrisk').length;
 
+  /* One label/value list keeps the meta block on a single rhythm. */
+  const meta = [
+    { label: 'Client', value: project.client },
+    { label: 'Location', value: project.location },
+    { label: 'PIC', value: project.pic },
+    { label: 'Contract', value: project.contractNo },
+    { label: 'Handover', value: project.handover ? fmtDate(project.handover) : '' },
+  ].filter(f => f.value);
+
   return (
     <Card>
       <CardContent className="flex h-full flex-col">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
           Active project
         </p>
-        <h2 className="mt-2 text-2xl font-semibold leading-tight tracking-tight">{project.name}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-          {[project.client, project.location, project.pic && `PIC: ${project.pic}`]
-            .filter(Boolean).join(' · ')}
-          {project.contractNo && <><br />Contract: {project.contractNo}</>}
-        </p>
+        <h2 className="mt-1.5 text-2xl font-semibold leading-tight tracking-tight">
+          {project.name}
+        </h2>
 
-        <div className="mt-6">
+        <Separator className="my-4" />
+
+        <dl className="grid grid-cols-[6rem_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+          {meta.map(f => (
+            <div key={f.label} className="contents">
+              <dt className="text-muted-foreground">{f.label}</dt>
+              <dd className={cn('truncate font-medium', f.label === 'Handover' && 'tabular')}>
+                {f.value}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        <Separator className="my-4" />
+
+        <div>
           <div className="mb-2 flex items-baseline justify-between">
-            <span className="text-sm font-medium text-muted-foreground">Overall Progress</span>
+            <span className="text-sm text-muted-foreground">Overall progress</span>
             <span className="text-lg font-semibold tabular">{progress}%</span>
           </div>
           <Progress value={progress} trackClassName="h-2" indicatorClassName="transition-[width] duration-700" />
         </div>
 
-        <Separator className="my-5" />
-
-        <div className="grid grid-cols-3 gap-4 text-center">
+        <div className="mt-5 grid grid-cols-3 gap-3">
           <Stat label="Items" value={projItems.length} />
           <Stat label="Late" value={late} warn={late > 0} />
-          <Stat label="At Risk" value={atrisk} warn={atrisk > 0} />
+          <Stat label="At risk" value={atrisk} warn={atrisk > 0} />
         </div>
-
-        {project.handover && (
-          <div className="mt-5 flex items-center justify-between rounded-lg bg-muted/60 px-4 py-3">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Handover target
-            </span>
-            <span className="text-sm font-semibold tabular">{fmtDate(project.handover)}</span>
-          </div>
-        )}
 
         <div className="mt-auto flex gap-2 pt-6">
           <Button className="flex-1" variant="outline" onClick={onGoOverview}>
             <ListChecks className="size-4" />
             View Overview
           </Button>
-          <Button variant="destructive" onClick={onDeleteProject}>
-            <Trash2 className="size-4" />
-            Delete
-          </Button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Delete project"
+                  className="text-muted-foreground hover:border-destructive/30 hover:bg-late-bg hover:text-late-fg"
+                  onClick={onDeleteProject}
+                />
+              }
+            >
+              <Trash2 className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>Delete project</TooltipContent>
+          </Tooltip>
         </div>
       </CardContent>
     </Card>
@@ -89,9 +112,11 @@ export default function ProjectHero({
 
 function Stat({ label, value, warn }: { label: string; value: number; warn?: boolean }) {
   return (
-    <div>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className={cn('mt-1 text-xl font-semibold tabular', warn && 'text-late-fg')}>{value}</p>
+    <div className="rounded-lg bg-muted/60 px-3 py-2.5">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+      <p className={cn('mt-0.5 text-xl font-semibold tabular', warn && 'text-late-fg')}>{value}</p>
     </div>
   );
 }

@@ -436,7 +436,9 @@ export default function ProcurementApp() {
                     setSearch(''); setFilterStatus(''); setFilterDisc(''); setFilterVendor('');
                   }}
                   onGroupBy={setGroupBy}
-                  onAddProject={() => nav('projects')}
+                  onImport={() => setImportOpen(true)}
+                  onExport={handleExport}
+                  exporting={exporting}
                   onAddItem={() => openItemForm()}
                   onOpenDetail={openDetail}
                 />

@@ -94,17 +94,12 @@ export default function DashboardPage({
 
   const header = (
     <div className="mb-6">
-      {project && (
-        <p className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <span>{[project.name, project.client, project.location].filter(Boolean).join(' · ')}</span>
-          {project.revision ? (
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+          {project?.revision ? (
             <Badge variant="outline" className="tabular">rev.{project.revision}</Badge>
           ) : null}
-        </p>
-      )}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
         </div>
         <div className="flex shrink-0 gap-2">
           <Button variant="outline" onClick={onImport}>
