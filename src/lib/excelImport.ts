@@ -196,10 +196,15 @@ function stripSectionMarker(text: string): string {
 function readSectionHeader(noText: string, descText: string, vendorText: string): string | null {
   if (!descText) return null;
 
+  /** "A", "1", "1.", "1.1" — the WBS label a banner row carries. */
+  const marker = /^(?:[A-Z]|[IVX]+|\d+(?:\.\d+)*)\.?$/.test(noText.trim());
   const merged = descText === vendorText && descText === noText;
-  if (!merged) {
+  // Banners are often merged across the data columns only, leaving the WBS
+  // number in its own cell — that is how this app writes them.
+  const mergedBody = !!vendorText && descText === vendorText;
+
+  if (!merged && !(mergedBody && (!noText.trim() || marker))) {
     if (vendorText) return null;
-    const marker = /^[A-Z]$|^[IVX]+$|^\d+\.$/.test(noText.trim());
     if (noText.trim() && !marker) return null;
   }
 
@@ -410,7 +415,8 @@ export async function importWorkbook(
   workbook.eachSheet(sheet => {
     if (sheet.state === 'hidden' || sheet.state === 'veryHidden') return;
     if (sheet.rowCount < 2) return;
-    if (isOwnExport && sheet.name !== PRIMARY_SHEET) return;
+    // Case-insensitive: older revisions of this app wrote the sheet as "MONITORING".
+    if (isOwnExport && sheet.name.toUpperCase() !== PRIMARY_SHEET.toUpperCase()) return;
     try {
       parseSheet(sheet, result);
     } catch (err) {

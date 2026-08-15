@@ -2,37 +2,57 @@ import ExcelJS from 'exceljs';
 import type { Anomaly, ItemStatus, MilestoneEntry, ProcurementItem, Project } from '@/types';
 import {
   STATUS_LABELS, computeDeviation, computeOverallProgress, detectAnomalies,
-  disciplineBreakdown, fmtDate, milestoneStats, today, vendorStats,
+  disciplineBreakdown, milestoneStats, today, vendorStats,
 } from './procurement';
 
 /* ═══════════════════════════════════════════════════════════
    Export the whole project as a workbook the client can send on
    without reformatting: a summary, the monitoring table in the
    layout their own sheets use, milestone detail, vendors, and
-   the anomalies the app detected.
+   the findings the app detected.
+
+   The styling follows the client's own Procurement Monitoring
+   Dashboard: Calibri 10 in black, a grey header band split into
+   colour-coded column groups, medium black rules around each
+   block and thin ones inside, dd/mm/yy dates, and A3 landscape
+   at 80% zoom. Colour marks a group or a status, nothing else.
    ═══════════════════════════════════════════════════════════ */
 
-const INK        = 'FF1D1D1F';
-const INK_SOFT   = 'FF6E6E73';
-const RULE       = 'FFD8D8DC';
-const HEAD_BG    = 'FF1D1D1F';
-const HEAD_INK   = 'FFFFFFFF';
-const SECTION_BG = 'FFEDEDF0';
+/* Standard-palette colours, straight off Excel's own picker — the
+   same ones the client's sheet uses. */
+const GREY   = 'FFD9D9D9'; // header base
+const CYAN   = 'FF00B0F0'; // vendor group
+const GREEN  = 'FF92D050'; // purchase order group
+const YELLOW = 'FFFFFF00'; // progress group
+const PEACH  = 'FFF8CBAD'; // milestone group
+const ORANGE = 'FFF4B183'; // section banner
+const CREAM  = 'FFFFF2CC'; // sub-band and soft highlight
+const BLACK  = 'FF000000';
+const WHITE  = 'FFFFFFFF';
+const BAND   = 'FFF2F2F2'; // totals strip
 
-const STATUS_FILL: Record<ItemStatus, string> = {
-  onsite:   'FFE8F1FF',
-  ontrack:  'FFE8F8EC',
-  atrisk:   'FFFFF6E5',
-  late:     'FFFCEDEB',
-  planning: 'FFF2F2F5',
+const FONT = 'Calibri';
+const SIZE = 10;
+
+/** Status colours, in the same register the client codes cells with. */
+const STATUS_FILL: Record<ItemStatus, string | null> = {
+  onsite:   'FFA9D08E',
+  ontrack:  'FF9DC3E6',
+  atrisk:   'FFFFE699',
+  late:     'FFFF0000',
+  planning: null,
 };
 const STATUS_INK: Record<ItemStatus, string> = {
-  onsite:   'FF0059B8',
-  ontrack:  'FF1E7A33',
-  atrisk:   'FFB36900',
-  late:     'FFC73E3A',
-  planning: 'FF6E6E73',
+  onsite:   BLACK,
+  ontrack:  BLACK,
+  atrisk:   BLACK,
+  late:     WHITE,
+  planning: 'FF595959',
 };
+
+/** Indonesian short date, the format the client's columns are set to. */
+const DATE_FMT = '[$-13809]dd/mm/yy;@';
+const PCT_FMT = '0.00%';
 
 type Align = Partial<ExcelJS.Alignment>;
 
@@ -40,52 +60,157 @@ const LEFT: Align   = { vertical: 'middle', horizontal: 'left',   wrapText: true
 const CENTER: Align = { vertical: 'middle', horizontal: 'center', wrapText: true };
 const RIGHT: Align  = { vertical: 'middle', horizontal: 'right' };
 
-function thinBorder(color = RULE): Partial<ExcelJS.Borders> {
-  const side = { style: 'thin' as const, color: { argb: color } };
-  return { top: side, left: side, bottom: side, right: side };
+type Weight = 'thin' | 'medium';
+
+function body(opts: Partial<ExcelJS.Font> = {}): Partial<ExcelJS.Font> {
+  return { name: FONT, size: SIZE, color: { argb: BLACK }, ...opts };
 }
 
-function fill(cell: ExcelJS.Cell, argb: string): void {
+/** Black rules, thin inside a block and medium around it. */
+function rule(
+  top: Weight = 'thin', left: Weight = 'thin', bottom: Weight = 'thin', right: Weight = 'thin',
+): Partial<ExcelJS.Borders> {
+  const s = (style: Weight) => ({ style, color: { argb: BLACK } });
+  return { top: s(top), left: s(left), bottom: s(bottom), right: s(right) };
+}
+
+function fill(cell: ExcelJS.Cell, argb: string | null): void {
+  if (!argb) return;
   cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb } };
 }
 
-/** Style a row as a table header: dark ground, white bold text, centred. */
-function styleHeaderRow(row: ExcelJS.Row, height = 30): void {
-  row.height = height;
-  row.eachCell({ includeEmpty: true }, cell => {
-    fill(cell, HEAD_BG);
-    cell.font = { bold: true, size: 9, color: { argb: HEAD_INK }, name: 'Calibri' };
-    cell.alignment = CENTER;
-    cell.border = thinBorder('FF3A3A3C');
-  });
+/** Real dates, so the client can sort and filter the column. */
+function toDate(iso: string): Date | null {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return new Date(y, m - 1, d, 12);
 }
 
-/** Title block shown at the top of every sheet. */
-function writeTitle(
+function shortDate(iso: string): string {
+  const d = toDate(iso);
+  if (!d) return '';
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${String(d.getFullYear()).slice(2)}`;
+}
+
+/** A3 landscape at 80%, the way these dashboards are set up for printing. */
+function sheetOptions(freeze?: { x?: number; y: number }): Partial<ExcelJS.AddWorksheetOptions> {
+  return {
+    properties: { defaultRowHeight: 13.8 },
+    views: [{
+      zoomScale: 80,
+      ...(freeze ? { state: 'frozen' as const, xSplit: freeze.x ?? 0, ySplit: freeze.y } : {}),
+    }],
+    pageSetup: {
+      // A3 (8) is missing from ExcelJS's PaperSize enum, so it goes in raw.
+      paperSize: 8 as ExcelJS.PaperSize,
+      orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
+    },
+  };
+}
+
+/**
+ * Header band: grey by default, or the group colour where one is given.
+ * `edges` marks which sides of the band get the heavier rule.
+ */
+function styleHead(
+  row: ExcelJS.Row,
+  span: number,
+  height: number,
+  colour: (col: number) => string,
+  edges: { top?: Weight; bottom?: Weight; sides?: (col: number) => [Weight, Weight] } = {},
+): void {
+  // Every cell of a merged run must carry the same border, or the last one
+  // written wins and the block loses its outer rule.
+  const sides = edges.sides ?? ((c: number): [Weight, Weight] => [
+    c === 1 ? 'medium' : 'thin',
+    c === span ? 'medium' : 'thin',
+  ]);
+  row.height = height;
+  for (let c = 1; c <= span; c++) {
+    const cell = row.getCell(c);
+    const [left, right] = sides(c);
+    fill(cell, colour(c));
+    cell.font = body({ bold: true });
+    cell.alignment = CENTER;
+    cell.border = rule(edges.top ?? 'medium', left, edges.bottom ?? 'medium', right);
+  }
+}
+
+/** Outer rule for a column that belongs to a merged group spanning the row. */
+function groupSides(bounds: Array<[number, number]>, span: number) {
+  return (col: number): [Weight, Weight] => {
+    const group = bounds.find(([from, to]) => col >= from && col <= to);
+    if (!group) return [col === 1 ? 'medium' : 'thin', col === span ? 'medium' : 'thin'];
+    return [group[0] === 1 ? 'medium' : 'thin', group[1] === span ? 'medium' : 'thin'];
+  };
+}
+
+/**
+ * Caption block: title top-left, doc/rev stamp boxed on the right.
+ * The table starts on row 4.
+ */
+function writeCaption(
   sheet: ExcelJS.Worksheet,
   span: number,
   title: string,
   subtitle: string,
+  docNo: string,
   revision: number,
 ): void {
-  sheet.mergeCells(1, 1, 1, span);
   const t = sheet.getCell(1, 1);
-  t.value = title;
-  t.font = { bold: true, size: 14, color: { argb: INK }, name: 'Calibri' };
-  t.alignment = CENTER;
-  sheet.getRow(1).height = 24;
+  t.value = title.toUpperCase();
+  t.font = { name: FONT, size: 12, bold: true, color: { argb: BLACK } };
+  t.alignment = { vertical: 'middle', horizontal: 'left' };
+  sheet.getRow(1).height = 18;
 
-  sheet.mergeCells(2, 1, 2, span);
   const s = sheet.getCell(2, 1);
   s.value = subtitle;
-  s.font = { size: 9, color: { argb: INK_SOFT }, italic: true, name: 'Calibri' };
-  s.alignment = CENTER;
+  s.font = body();
+  s.alignment = { vertical: 'middle', horizontal: 'left' };
+  sheet.getRow(2).height = 15;
 
-  sheet.mergeCells(3, 1, 3, span);
-  const r = sheet.getCell(3, 1);
-  r.value = `rev.${revision}  ·  printed ${fmtDate(today())}`;
-  r.font = { size: 9, bold: true, color: { argb: INK_SOFT }, name: 'Calibri' };
-  r.alignment = RIGHT;
+  /* Stamp box, echoing the dated cell in the client's own header. */
+  const from = Math.max(2, span - 2);
+  const lines = [
+    `Doc. No.  ${docNo}`,
+    `Rev. ${String(revision).padStart(2, '0')}    ${shortDate(today())}`,
+  ];
+  lines.forEach((text, i) => {
+    const r = i + 1;
+    if (span > 3) sheet.mergeCells(r, from, r, span);
+    const c = sheet.getCell(r, span > 3 ? from : span);
+    c.value = text;
+    c.font = body({ bold: i === 1, size: 9 });
+    c.alignment = RIGHT;
+    fill(c, CREAM);
+    c.border = rule(i === 0 ? 'thin' : 'thin', 'thin', 'thin', 'thin');
+  });
+
+  sheet.getRow(3).height = 6;
+}
+
+/** Repeat the header on every printed page and number the pages. */
+function printSetup(sheet: ExcelJS.Worksheet, headerRow: number, caption: string): void {
+  sheet.pageSetup.printTitlesRow = `${headerRow}:${headerRow}`;
+  sheet.headerFooter = {
+    oddFooter: `&L&"${FONT}"&8${caption}&R&"${FONT}"&8Page &P of &N`,
+  };
+}
+
+/** Short document number, e.g. PRC-MON/PGB/03. */
+function docNumber(project: Project | null, revision: number): string {
+  const initials = (project?.name ?? 'GEN')
+    .replace(/[^A-Za-z\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .map(w => w[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 3) || 'GEN';
+  return `PRC-MON/${initials}/${String(revision).padStart(2, '0')}`;
 }
 
 /* ─────────────── Sheet 1 · Summary ─────────────── */
@@ -97,161 +222,192 @@ function buildSummary(
   anomalies: Anomaly[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('SUMMARY', {
-    properties: { defaultRowHeight: 16 },
-    pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  const sheet = wb.addWorksheet('Summary', {
+    ...sheetOptions(),
+    pageSetup: { ...sheetOptions().pageSetup, paperSize: 9, orientation: 'portrait' },
   });
+  /* Column B is the colon gutter; labels sit in A:B, values from C on. */
   sheet.columns = [
-    { width: 3 }, { width: 26 }, { width: 16 }, { width: 14 },
-    { width: 14 }, { width: 14 }, { width: 22 },
+    { width: 24 }, { width: 2 }, { width: 14 }, { width: 14 },
+    { width: 14 }, { width: 14 }, { width: 16 },
   ];
+  const span = 7;
 
-  writeTitle(sheet, 7, 'PROCUREMENT SUMMARY', project?.name ?? 'All projects', revision);
+  writeCaption(
+    sheet, span,
+    'Procurement Monitoring Summary',
+    project?.name ?? 'All projects',
+    docNumber(project, revision), revision,
+  );
 
-  let r = 5;
+  let r = 4;
 
-  /** Small two-column key/value block. */
   const kv = (label: string, value: string | number, bold = false) => {
-    const l = sheet.getCell(r, 2);
+    const l = sheet.getCell(r, 1);
     l.value = label;
-    l.font = { size: 10, color: { argb: INK_SOFT }, name: 'Calibri' };
+    l.font = body();
+    const colon = sheet.getCell(r, 2);
+    colon.value = ':';
+    colon.font = body();
+    sheet.mergeCells(r, 3, r, span);
     const v = sheet.getCell(r, 3);
     v.value = value;
-    v.font = { size: 10, bold, color: { argb: INK }, name: 'Calibri' };
-    v.alignment = LEFT;
-    sheet.mergeCells(r, 3, r, 4);
+    v.font = body({ bold });
+    v.alignment = { vertical: 'middle', horizontal: 'left' };
     r++;
+    return v;
   };
 
-  const sectionHead = (text: string) => {
+  /* Cream sub-band, the way the client marks a section inside a table. */
+  const heading = (text: string) => {
     r++;
-    sheet.mergeCells(r, 2, r, 7);
-    const c = sheet.getCell(r, 2);
-    c.value = text;
-    c.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' }, name: 'Calibri' };
-    fill(c, HEAD_BG);
+    sheet.mergeCells(r, 1, r, span);
+    const c = sheet.getCell(r, 1);
+    c.value = text.toUpperCase();
+    c.font = body({ bold: true });
     c.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-    sheet.getRow(r).height = 20;
-    r += 1;
+    fill(c, CREAM);
+    for (let col = 1; col <= span; col++) {
+      sheet.getCell(r, col).border = rule('medium', col === 1 ? 'medium' : 'thin', 'medium', col === span ? 'medium' : 'thin');
+    }
+    sheet.getRow(r).height = 18;
+    r++;
   };
 
-  sectionHead('PROJECT DETAILS');
-  kv('Project name', project?.name ?? '—', true);
-  kv('Client', project?.client ?? '—');
-  kv('Location', project?.location ?? '—');
-  kv('PIC', project?.pic ?? '—');
-  kv('Contract no.', project?.contractNo ?? '—');
-  kv('Handover target', project?.handover ? fmtDate(project.handover) : '—');
+  heading('Project');
+  kv('Project name', project?.name || '', true);
+  kv('Client', project?.client || '');
+  kv('Location', project?.location || '');
+  kv('PIC', project?.pic || '');
+  kv('Contract no.', project?.contractNo || '');
+  kv('Handover target', project?.handover ? shortDate(project.handover) : '');
 
   const dev = computeDeviation(items, project);
 
-  sectionHead('POSITION AGAINST PLAN');
-  kv('Planned progress', `${dev.planPct}%`);
-  kv('Actual progress', `${dev.actualPct}%`, true);
-  const devRow = r;
-  kv('Deviation', `${dev.deviation > 0 ? '+' : ''}${dev.deviation}%`, true);
-  const devCell = sheet.getCell(devRow, 3);
-  devCell.font = {
-    size: 10, bold: true, name: 'Calibri',
-    color: { argb: dev.deviation < 0 ? 'FFC73E3A' : 'FF1E7A33' },
+  heading('Progress against plan');
+  kv('Plan', dev.planPct / 100).numFmt = PCT_FMT;
+  kv('Actual', dev.actualPct / 100, true).numFmt = PCT_FMT;
+  kv('Deviation', dev.deviation / 100, true).numFmt = '+0.00%;-0.00%;0.00%';
+  if (dev.slipDays > 0) kv('Behind by', `${dev.slipDays} days`);
+
+  /** Sheet column for the n-th table column: the label spans the colon gutter. */
+  const at = (i: number) => (i === 0 ? 1 : i + 2);
+
+  const table = (
+    headers: string[],
+    rows: Array<Array<string | number>>,
+    decorate?: (row: ExcelJS.Row, index: number) => void,
+  ) => {
+    const last = at(headers.length - 1);
+    sheet.mergeCells(r, 1, r, 2);
+    const headRow = sheet.getRow(r);
+    headers.forEach((h, i) => { headRow.getCell(at(i)).value = h; });
+    styleHead(headRow, last, 20, () => GREY);
+    r++;
+    rows.forEach((cells, idx) => {
+      const row = sheet.getRow(r);
+      sheet.mergeCells(r, 1, r, 2);
+      cells.forEach((v, i) => {
+        const c = row.getCell(at(i));
+        if (v !== '') c.value = v;
+        c.alignment = i === 0 ? LEFT : CENTER;
+        c.font = body();
+        const col = at(i);
+        c.border = rule(
+          'thin',
+          col === 1 ? 'medium' : 'thin',
+          idx === rows.length - 1 ? 'medium' : 'thin',
+          col === last ? 'medium' : 'thin',
+        );
+      });
+      // The merged label still needs its right-hand half ruled.
+      row.getCell(2).border = row.getCell(1).border;
+      decorate?.(row, idx);
+      r++;
+    });
   };
-  if (dev.slipDays > 0) kv('Estimated delay', `${dev.slipDays} days`);
 
-  sectionHead('ITEM STATUS');
-  const statusCounts = (Object.keys(STATUS_LABELS) as ItemStatus[]).map(s => ({
-    status: s,
-    label: STATUS_LABELS[s],
-    n: items.filter(i => i.status === s).length,
-  }));
-  const statusHeadRow = r;
-  ['Status', 'Count', 'Share'].forEach((h, i) => {
-    const c = sheet.getCell(statusHeadRow, 2 + i);
-    c.value = h;
+  heading('Items by status');
+  const statuses = Object.keys(STATUS_LABELS) as ItemStatus[];
+  const statusRows: Array<Array<string | number>> = statuses.map(s => {
+    const n = items.filter(i => i.status === s).length;
+    return [STATUS_LABELS[s], n, items.length ? n / items.length : 0];
   });
-  styleHeaderRow(sheet.getRow(statusHeadRow), 20);
-  r++;
-  for (const s of statusCounts) {
-    const label = sheet.getCell(r, 2);
-    label.value = s.label;
-    label.font = { size: 10, bold: true, color: { argb: STATUS_INK[s.status] }, name: 'Calibri' };
-    fill(label, STATUS_FILL[s.status]);
-    label.border = thinBorder();
-
-    const n = sheet.getCell(r, 3);
-    n.value = s.n;
-    n.alignment = CENTER;
-    n.border = thinBorder();
-    n.font = { size: 10, name: 'Calibri' };
-
-    const pct = sheet.getCell(r, 4);
-    pct.value = items.length ? s.n / items.length : 0;
-    pct.numFmt = '0%';
-    pct.alignment = CENTER;
-    pct.border = thinBorder();
-    pct.font = { size: 10, name: 'Calibri' };
-    r++;
-  }
-  const totalRow = sheet.getCell(r, 2);
-  totalRow.value = 'TOTAL';
-  totalRow.font = { size: 10, bold: true, name: 'Calibri' };
-  totalRow.border = thinBorder();
-  const totalN = sheet.getCell(r, 3);
-  totalN.value = items.length;
-  totalN.alignment = CENTER;
-  totalN.font = { size: 10, bold: true, name: 'Calibri' };
-  totalN.border = thinBorder();
-  r += 1;
-
-  sectionHead('MILESTONE POSITION');
-  const msHeadRow = r;
-  ['Milestone', 'Done', 'Scheduled', 'Overdue', 'Not scheduled'].forEach((h, i) => {
-    sheet.getCell(msHeadRow, 2 + i).value = h;
-  });
-  styleHeaderRow(sheet.getRow(msHeadRow), 20);
-  r++;
-  for (const ms of milestoneStats(items)) {
-    const cells = [`${ms.label} — ${ms.name}`, ms.done, ms.scheduled, ms.overdue, ms.unplanned];
-    cells.forEach((v, i) => {
-      const c = sheet.getCell(r, 2 + i);
-      c.value = v;
-      c.alignment = i === 0 ? LEFT : CENTER;
-      c.font = { size: 10, bold: i === 0, name: 'Calibri' };
-      c.border = thinBorder();
-      if (i === 3 && ms.overdue > 0) {
-        fill(c, STATUS_FILL.late);
-        c.font = { size: 10, bold: true, color: { argb: STATUS_INK.late }, name: 'Calibri' };
+  statusRows.push(['TOTAL', items.length, items.length ? 1 : 0]);
+  table(['Status', 'Items', 'Share'], statusRows, (row, idx) => {
+    row.getCell(at(2)).numFmt = PCT_FMT;
+    if (idx === statusRows.length - 1) {
+      for (let c = 1; c <= at(2); c++) {
+        row.getCell(c).font = body({ bold: true });
+        fill(row.getCell(c), BAND);
       }
-    });
-    r++;
-  }
-
-  sectionHead('BREAKDOWN BY DISCIPLINE');
-  const discHeadRow = r;
-  ['Discipline', 'Total', 'On Site', 'On Track', 'At Risk', 'Late'].forEach((h, i) => {
-    sheet.getCell(discHeadRow, 2 + i).value = h;
+      return;
+    }
+    const s = statuses[idx];
+    const label = row.getCell(1);
+    fill(label, STATUS_FILL[s]);
+    label.font = body({ bold: true, color: { argb: STATUS_INK[s] } });
   });
-  styleHeaderRow(sheet.getRow(discHeadRow), 20);
-  r++;
-  for (const d of disciplineBreakdown(items)) {
-    const cells = [d.discipline, d.total, d.counts.onsite, d.counts.ontrack, d.counts.atrisk, d.counts.late];
-    cells.forEach((v, i) => {
-      const c = sheet.getCell(r, 2 + i);
-      c.value = v;
-      c.alignment = i === 0 ? LEFT : CENTER;
-      c.font = { size: 10, bold: i === 0, name: 'Calibri' };
-      c.border = thinBorder();
-    });
-    r++;
-  }
+
+  heading('Milestones');
+  const ms = milestoneStats(items);
+  table(
+    ['Milestone', 'Done', 'Scheduled', 'Overdue', 'Not scheduled'],
+    ms.map(m => [`${m.label} - ${m.name}`, m.done, m.scheduled, m.overdue, m.unplanned]),
+    (row, idx) => {
+      row.getCell(1).font = body({ bold: true });
+      if (ms[idx].overdue > 0) {
+        const c = row.getCell(at(3));
+        fill(c, STATUS_FILL.late);
+        c.font = body({ bold: true, color: { argb: STATUS_INK.late } });
+      }
+    },
+  );
+
+  heading('By discipline');
+  table(
+    ['Discipline', 'Items', 'On Site', 'On Track', 'At Risk', 'Late'],
+    disciplineBreakdown(items).map(d => [
+      d.discipline, d.total, d.counts.onsite, d.counts.ontrack, d.counts.atrisk, d.counts.late,
+    ]),
+    row => {
+      row.getCell(1).font = body({ bold: true });
+      const late = row.getCell(at(5));
+      if (Number(late.value) > 0) late.font = body({ bold: true });
+    },
+  );
 
   if (anomalies.length) {
-    sectionHead('DETECTED ANOMALIES');
-    sheet.mergeCells(r, 2, r, 7);
-    const note = sheet.getCell(r, 2);
-    note.value = `${anomalies.length} findings — see the ANOMALIES sheet for detail.`;
-    note.font = { size: 10, italic: true, color: { argb: STATUS_INK.late }, name: 'Calibri' };
     r++;
+    sheet.mergeCells(r, 1, r, span);
+    const crit = anomalies.filter(a => a.severity === 'crit').length;
+    const note = sheet.getCell(r, 1);
+    note.value = crit
+      ? `${anomalies.length} findings open, ${crit} of them critical. Detail on the Findings sheet.`
+      : `${anomalies.length} findings open. Detail on the Findings sheet.`;
+    note.font = body();
+    r += 1;
   }
+
+  /* Sign-off strip, left blank for wet signatures. */
+  r += 2;
+  const roles = ['Prepared by', 'Checked by', 'Approved by'];
+  const cols = [1, 3, 5];
+  roles.forEach((role, i) => {
+    const c = sheet.getCell(r, cols[i]);
+    c.value = role;
+    c.font = body();
+  });
+  const signRow = r + 4;
+  roles.forEach((_, i) => {
+    const c = sheet.getCell(signRow, cols[i]);
+    if (i === 0 && project?.pic) c.value = project.pic;
+    c.font = body({ bold: true });
+    c.border = { top: { style: 'thin', color: { argb: BLACK } } };
+    sheet.getCell(signRow, cols[i] + 1).border = { top: { style: 'thin', color: { argb: BLACK } } };
+  });
+
+  printSetup(sheet, 1, `${project?.name ?? 'Procurement'} | summary`);
 }
 
 /* ─────────────── Sheet 2 · Monitoring ─────────────── */
@@ -260,41 +416,76 @@ interface Column {
   header: string;
   width: number;
   align: Align;
-  value: (item: ProcurementItem) => string | number | null;
+  /** Returned strings land as text; dates and numbers keep their type. */
+  value: (item: ProcurementItem) => string | number | Date | null;
   numFmt?: string;
 }
 
-const MONITORING_COLUMNS: Column[] = [
-  { header: 'No', width: 5, align: CENTER, value: () => null },
-  { header: 'EQUIPMENT / MATERIAL', width: 34, align: LEFT, value: i => i.desc },
-  { header: 'QTY', width: 6, align: CENTER, value: i => i.qty },
-  { header: 'UNIT', width: 8, align: CENTER, value: i => i.unit },
-  { header: 'VENDOR', width: 26, align: LEFT, value: i => i.vendor },
-  { header: 'BRAND', width: 16, align: LEFT, value: i => i.brand },
-  { header: 'PO NO', width: 16, align: LEFT, value: i => i.poNo },
-  { header: 'PO DATE', width: 12, align: CENTER, value: i => (i.poDate ? fmtDate(i.poDate) : '') },
-  { header: 'READINESS DOC', width: 11, align: CENTER, value: i => i.readinessDoc, numFmt: '0%' },
-  { header: 'FAT / INSPEKSI', width: 13, align: CENTER, value: i => fmtDate(i.fat.actual || i.fat.forecast || i.fat.plan) },
-  { header: 'STATUS FAT', width: 20, align: LEFT, value: i => fatStatusText(i) },
-  { header: 'READY TO SHIP', width: 13, align: CENTER, value: i => fmtDate(i.rts.forecast || i.rts.plan) },
-  { header: 'ACTUAL RTS', width: 13, align: CENTER, value: i => fmtDate(i.rts.actual) },
-  { header: 'PLANNING DELIVERY TO SITE', width: 14, align: CENTER, value: i => fmtDate(i.mos.forecast || i.mos.plan) },
-  { header: 'ACTUAL ON SITE', width: 13, align: CENTER, value: i => fmtDate(i.mos.actual) },
-  { header: 'DO NO.', width: 22, align: LEFT, value: i => i.doNo },
-  { header: 'TERM OF PAYMENT', width: 26, align: LEFT, value: i => i.termOfPayment },
-  { header: 'PROGRESS', width: 10, align: CENTER, value: i => i.progress / 100, numFmt: '0%' },
-  { header: 'STATUS', width: 11, align: CENTER, value: i => STATUS_LABELS[i.status] },
-  { header: 'KETERANGAN', width: 34, align: LEFT, value: i => i.statusNote },
+/** Column groups, in the client's own order and colours. */
+interface Group {
+  label: string;
+  colour: string;
+  columns: Column[];
+}
+
+const GROUPS: Group[] = [
+  {
+    label: 'Material / Equipment', colour: GREY, columns: [
+      { header: 'No', width: 6.5, align: CENTER, value: () => null },
+      { header: 'Equipment / Material', width: 30, align: LEFT, value: i => i.desc },
+      { header: 'Qty', width: 6.5, align: CENTER, value: i => i.qty },
+      { header: 'Unit', width: 7.5, align: CENTER, value: i => i.unit },
+    ],
+  },
+  {
+    label: 'Vendor', colour: CYAN, columns: [
+      { header: 'Supplier / Vendor Name', width: 22, align: LEFT, value: i => i.vendor },
+      { header: 'Brand', width: 14, align: LEFT, value: i => i.brand },
+    ],
+  },
+  {
+    label: 'Purchase Order', colour: GREEN, columns: [
+      { header: 'PO No.', width: 15, align: CENTER, value: i => i.poNo },
+      { header: 'PO Date', width: 11.5, align: CENTER, value: i => toDate(i.poDate), numFmt: DATE_FMT },
+      { header: 'DO No.', width: 18, align: LEFT, value: i => i.doNo },
+      { header: 'Term of Payment', width: 24, align: LEFT, value: i => i.termOfPayment },
+      { header: 'Doc. Readiness', width: 11.5, align: CENTER, value: i => i.readinessDoc, numFmt: PCT_FMT },
+    ],
+  },
+  {
+    label: 'Milestone', colour: PEACH, columns: [
+      { header: 'FAT / Inspeksi', width: 11.5, align: CENTER, value: i => toDate(i.fat.actual || i.fat.forecast || i.fat.plan), numFmt: DATE_FMT },
+      { header: 'FAT Status', width: 20, align: LEFT, value: i => fatStatusText(i) },
+      { header: 'Ready to Ship', width: 11.5, align: CENTER, value: i => toDate(i.rts.forecast || i.rts.plan), numFmt: DATE_FMT },
+      { header: 'Actual RTS', width: 11.5, align: CENTER, value: i => toDate(i.rts.actual), numFmt: DATE_FMT },
+      { header: 'Plan Delivery to Site', width: 13, align: CENTER, value: i => toDate(i.mos.forecast || i.mos.plan), numFmt: DATE_FMT },
+      { header: 'Actual on Site', width: 11.5, align: CENTER, value: i => toDate(i.mos.actual), numFmt: DATE_FMT },
+    ],
+  },
+  {
+    label: 'Progress Status', colour: YELLOW, columns: [
+      { header: '% Progress', width: 11.5, align: CENTER, value: i => i.progress / 100, numFmt: PCT_FMT },
+      { header: 'Status', width: 11, align: CENTER, value: i => STATUS_LABELS[i.status] },
+      { header: 'Keterangan', width: 32, align: LEFT, value: i => i.statusNote },
+    ],
+  },
 ];
+
+const MONITORING_COLUMNS: Column[] = GROUPS.flatMap(g => g.columns);
+const SPAN = MONITORING_COLUMNS.length;
+const STATUS_COL = MONITORING_COLUMNS.findIndex(c => c.header === 'Status') + 1;
+const PROGRESS_COL = MONITORING_COLUMNS.findIndex(c => c.header === '% Progress') + 1;
+
+/** Colour of the group a column belongs to. */
+const COLUMN_COLOUR: string[] = GROUPS.flatMap(g => g.columns.map(() => g.colour));
 
 /** The wording the client's own sheets use in the FAT status column. */
 function fatStatusText(item: ProcurementItem): string {
-  if (item.fat.actual) return item.fat.note ? `FAT - Done · ${item.fat.note}` : 'FAT - Done';
+  if (item.fat.actual) return item.fat.note ? `FAT - Done. ${item.fat.note}` : 'FAT - Done';
   const due = item.fat.forecast || item.fat.plan;
   if (!due) return item.fat.note || 'TBA';
-  const overdue = due < today();
-  const base = overdue ? 'Estimated — overdue' : 'Estimated';
-  return item.fat.note ? `${base} · ${item.fat.note}` : base;
+  const base = due < today() ? 'Estimated - overdue' : 'Estimated';
+  return item.fat.note ? `${base}. ${item.fat.note}` : base;
 }
 
 function buildMonitoring(
@@ -303,40 +494,53 @@ function buildMonitoring(
   items: ProcurementItem[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('MONITORING', {
-    views: [{ state: 'frozen', xSplit: 2, ySplit: 5 }],
-    pageSetup: {
-      orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
-      paperSize: 9, margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
-    },
-  });
+  const sheet = wb.addWorksheet('Monitoring', sheetOptions({ x: 2, y: 5 }));
   sheet.columns = MONITORING_COLUMNS.map(c => ({ width: c.width }));
 
-  writeTitle(
-    sheet, MONITORING_COLUMNS.length,
-    'PROCUREMENT MONITORING STATUS',
-    [project?.name, project?.client].filter(Boolean).join('  ·  ') || 'All projects',
-    revision,
+  writeCaption(
+    sheet, SPAN,
+    'Procurement Monitoring Dashboard',
+    [project?.name, project?.client].filter(Boolean).join(' - ') || 'All projects',
+    docNumber(project, revision), revision,
   );
+
+  /* Two-tier header: group band over the column names. */
+  const bandRow = sheet.getRow(4);
+  const bounds: Array<[number, number]> = [];
+  let col = 1;
+  for (const group of GROUPS) {
+    const to = col + group.columns.length - 1;
+    if (to > col) sheet.mergeCells(4, col, 4, to);
+    bandRow.getCell(col).value = group.label.toUpperCase();
+    bounds.push([col, to]);
+    col = to + 1;
+  }
+  styleHead(bandRow, SPAN, 20, c => COLUMN_COLOUR[c - 1], {
+    top: 'medium', bottom: 'thin', sides: groupSides(bounds, SPAN),
+  });
 
   const headRow = sheet.getRow(5);
   MONITORING_COLUMNS.forEach((c, i) => { headRow.getCell(i + 1).value = c.header; });
-  styleHeaderRow(headRow, 32);
+  // Tall enough for the longest header to wrap onto two lines.
+  styleHead(headRow, SPAN, 34, c => COLUMN_COLOUR[c - 1], { top: 'thin', bottom: 'medium' });
 
   let r = 6;
   const groups = disciplineBreakdown(items);
-  const sectionLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
   groups.forEach((group, gi) => {
-    /* Discipline banner, matching the A / B / C sections in the client's sheets. */
-    sheet.mergeCells(r, 1, r, MONITORING_COLUMNS.length);
-    const banner = sheet.getCell(r, 1);
-    banner.value = `${sectionLetters[gi] ?? gi + 1}.  ${group.discipline.toUpperCase()}`;
-    banner.font = { bold: true, size: 10, color: { argb: INK }, name: 'Calibri' };
-    fill(banner, SECTION_BG);
-    banner.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
-    banner.border = thinBorder();
-    sheet.getRow(r).height = 20;
+    /* Discipline banner, numbered the way the client's WBS column runs. */
+    sheet.mergeCells(r, 2, r, SPAN);
+    sheet.getCell(r, 1).value = gi + 1;
+    const banner = sheet.getCell(r, 2);
+    banner.value = group.discipline.toUpperCase();
+    for (let c = 1; c <= SPAN; c++) {
+      const cell = sheet.getCell(r, c);
+      fill(cell, ORANGE);
+      cell.font = body({ bold: true });
+      cell.alignment = c === 1 ? CENTER : { vertical: 'middle', horizontal: 'left', indent: 1 };
+      cell.border = rule('thin', c === 1 ? 'medium' : 'thin', 'thin', c === SPAN ? 'medium' : 'thin');
+    }
+    sheet.getRow(r).height = 18;
     r++;
 
     const groupItems = items
@@ -345,60 +549,52 @@ function buildMonitoring(
 
     groupItems.forEach((item, idx) => {
       const row = sheet.getRow(r);
-      MONITORING_COLUMNS.forEach((col, ci) => {
+      MONITORING_COLUMNS.forEach((cfg, ci) => {
         const cell = row.getCell(ci + 1);
-        cell.value = ci === 0 ? idx + 1 : col.value(item);
-        cell.alignment = col.align;
-        cell.font = { size: 9, name: 'Calibri', color: { argb: INK } };
-        cell.border = thinBorder();
-        if (col.numFmt) cell.numFmt = col.numFmt;
+        const value = ci === 0 ? `${gi + 1}.${idx + 1}` : cfg.value(item);
+        // Leave blanks blank; a placeholder glyph only gets in the way of filters.
+        if (value !== null && value !== '') cell.value = value;
+        cell.alignment = cfg.align;
+        cell.font = body();
+        cell.border = rule('thin', ci === 0 ? 'medium' : 'thin', 'thin', ci === SPAN - 1 ? 'medium' : 'thin');
+        if (cfg.numFmt) cell.numFmt = cfg.numFmt;
       });
 
-      // Colour the status cell, and tint the whole row when it needs attention.
-      const statusCell = row.getCell(MONITORING_COLUMNS.findIndex(c => c.header === 'STATUS') + 1);
+      const statusCell = row.getCell(STATUS_COL);
       fill(statusCell, STATUS_FILL[item.status]);
-      statusCell.font = { size: 9, bold: true, name: 'Calibri', color: { argb: STATUS_INK[item.status] } };
+      statusCell.font = body({ bold: true, color: { argb: STATUS_INK[item.status] } });
 
-      if (item.status === 'late' || item.status === 'atrisk') {
-        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
-          if (colNumber !== MONITORING_COLUMNS.findIndex(c => c.header === 'STATUS') + 1) {
-            fill(cell, item.status === 'late' ? 'FFFDF5F4' : 'FFFFFBF2');
-          }
-        });
-      }
-
-      row.height = 26;
       r++;
     });
 
     if (!groupItems.length) {
-      sheet.mergeCells(r, 1, r, MONITORING_COLUMNS.length);
+      sheet.mergeCells(r, 1, r, SPAN);
       const empty = sheet.getCell(r, 1);
-      empty.value = 'No items yet.';
-      empty.font = { size: 9, italic: true, color: { argb: INK_SOFT }, name: 'Calibri' };
-      empty.alignment = CENTER;
-      empty.border = thinBorder();
+      empty.value = 'No items recorded.';
+      empty.font = body({ italic: true });
+      empty.alignment = { vertical: 'middle', horizontal: 'left', indent: 2 };
+      for (let c = 1; c <= SPAN; c++) {
+        sheet.getCell(r, c).border = rule('thin', c === 1 ? 'medium' : 'thin', 'thin', c === SPAN ? 'medium' : 'thin');
+      }
       r++;
     }
   });
 
   /* Totals strip. */
   const totalRow = sheet.getRow(r);
-  totalRow.getCell(1).value = '';
   totalRow.getCell(2).value = `TOTAL ${items.length} ITEMS`;
-  const progIdx = MONITORING_COLUMNS.findIndex(c => c.header === 'PROGRESS') + 1;
-  totalRow.getCell(progIdx).value = computeOverallProgress(items) / 100;
-  totalRow.getCell(progIdx).numFmt = '0%';
-  totalRow.eachCell({ includeEmpty: true }, cell => {
-    fill(cell, SECTION_BG);
-    cell.font = { bold: true, size: 9, name: 'Calibri', color: { argb: INK } };
-    cell.border = thinBorder();
-    cell.alignment = CENTER;
-  });
-  totalRow.getCell(2).alignment = LEFT;
-  totalRow.height = 22;
+  totalRow.getCell(PROGRESS_COL).value = computeOverallProgress(items) / 100;
+  totalRow.getCell(PROGRESS_COL).numFmt = PCT_FMT;
+  for (let c = 1; c <= SPAN; c++) {
+    const cell = totalRow.getCell(c);
+    fill(cell, BAND);
+    cell.font = body({ bold: true });
+    cell.alignment = c === 2 ? LEFT : CENTER;
+    cell.border = rule('medium', c === 1 ? 'medium' : 'thin', 'medium', c === SPAN ? 'medium' : 'thin');
+  }
+  totalRow.height = 18;
 
-  sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: MONITORING_COLUMNS.length } };
+  printSetup(sheet, 5, `${project?.name ?? 'Procurement'} | monitoring`);
 }
 
 /* ─────────────── Sheet 3 · Milestone ─────────────── */
@@ -409,68 +605,83 @@ function buildMilestones(
   items: ProcurementItem[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('MILESTONES', {
-    views: [{ state: 'frozen', xSplit: 1, ySplit: 6 }],
-    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-  });
+  const sheet = wb.addWorksheet('Milestone', sheetOptions({ x: 1, y: 5 }));
 
-  const widths = [30, 20, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 24];
+  const widths = [30, 22, 9.7, 9.7, 9.7, 9.7, 9.7, 9.7, 9.7, 9.7, 9.7, 9.2, 26];
   sheet.columns = widths.map(w => ({ width: w }));
+  const span = widths.length;
 
-  writeTitle(sheet, widths.length, 'MILESTONE SCHEDULE', 'FAT → RTS → MOS · plan, forecast, actual', revision);
+  /* Grey for the identity and tail columns, peach over the milestone trios. */
+  const colour = (c: number) => (c >= 3 && c <= 11 ? PEACH : GREY);
 
-  /* Two-tier header: milestone group over plan/forecast/actual. */
-  const groupRow = sheet.getRow(5);
-  sheet.mergeCells(5, 1, 6, 1); groupRow.getCell(1).value = 'EQUIPMENT / MATERIAL';
-  sheet.mergeCells(5, 2, 6, 2); groupRow.getCell(2).value = 'VENDOR';
-  sheet.mergeCells(5, 3, 5, 5); groupRow.getCell(3).value = 'FAT — FACTORY ACCEPTANCE TEST';
-  sheet.mergeCells(5, 6, 5, 8); groupRow.getCell(6).value = 'RTS — READY TO SHIP';
-  sheet.mergeCells(5, 9, 5, 11); groupRow.getCell(9).value = 'MOS — MATERIAL ON SITE';
-  sheet.mergeCells(5, 12, 6, 12); groupRow.getCell(12).value = 'PROGRESS';
-  sheet.mergeCells(5, 13, 6, 13); groupRow.getCell(13).value = 'MILESTONE NOTES';
-  styleHeaderRow(groupRow, 22);
+  writeCaption(
+    sheet, span,
+    'Milestone Schedule',
+    'FAT, RTS and MOS - plan, forecast and actual',
+    docNumber(project, revision), revision,
+  );
 
-  const subRow = sheet.getRow(6);
+  const bandRow = sheet.getRow(4);
+  sheet.mergeCells(4, 1, 5, 1);   bandRow.getCell(1).value = 'Equipment / Material';
+  sheet.mergeCells(4, 2, 5, 2);   bandRow.getCell(2).value = 'Vendor';
+  sheet.mergeCells(4, 3, 4, 5);   bandRow.getCell(3).value = 'FAT - Factory Acceptance Test';
+  sheet.mergeCells(4, 6, 4, 8);   bandRow.getCell(6).value = 'RTS - Ready to Ship';
+  sheet.mergeCells(4, 9, 4, 11);  bandRow.getCell(9).value = 'MOS - Material on Site';
+  sheet.mergeCells(4, 12, 5, 12); bandRow.getCell(12).value = '% Progress';
+  sheet.mergeCells(4, 13, 5, 13); bandRow.getCell(13).value = 'Notes';
+  const bounds: Array<[number, number]> = [[1, 1], [2, 2], [3, 5], [6, 8], [9, 11], [12, 12], [13, 13]];
+  styleHead(bandRow, span, 22, colour, { top: 'medium', bottom: 'thin', sides: groupSides(bounds, span) });
+
+  const headRow = sheet.getRow(5);
   ['', '', 'Plan', 'Forecast', 'Actual', 'Plan', 'Forecast', 'Actual', 'Plan', 'Forecast', 'Actual', '', '']
-    .forEach((v, i) => { if (v) subRow.getCell(i + 1).value = v; });
-  styleHeaderRow(subRow, 18);
+    .forEach((v, i) => { if (v) headRow.getCell(i + 1).value = v; });
+  styleHead(headRow, span, 18, colour, { top: 'thin', bottom: 'medium' });
 
-  let r = 7;
+  /* The four cells merged down both tiers own the full-height rule. */
+  for (const c of [1, 2, 12, 13]) {
+    sheet.getCell(4, c).border = rule('medium', c === 1 ? 'medium' : 'thin', 'medium', c === span ? 'medium' : 'thin');
+  }
+
+  let r = 6;
   const todayStr = today();
+  const sorted = [...items].sort(
+    (a, b) => a.discipline.localeCompare(b.discipline) || a.desc.localeCompare(b.desc),
+  );
 
-  for (const item of [...items].sort((a, b) => a.discipline.localeCompare(b.discipline) || a.desc.localeCompare(b.desc))) {
+  for (const item of sorted) {
     const row = sheet.getRow(r);
     row.getCell(1).value = item.desc;
     row.getCell(2).value = item.vendor;
 
-    const trio = (ms: MilestoneEntry, startCol: number) => {
-      const cells: Array<[number, string]> = [
-        [startCol,     ms.plan],
-        [startCol + 1, ms.forecast],
-        [startCol + 2, ms.actual],
+    const trio = (entry: MilestoneEntry, startCol: number) => {
+      const dates: Array<[number, string]> = [
+        [startCol,     entry.plan],
+        [startCol + 1, entry.forecast],
+        [startCol + 2, entry.actual],
       ];
-      for (const [col, date] of cells) {
-        const cell = row.getCell(col);
-        cell.value = date ? fmtDate(date) : '—';
+      for (const [c, iso] of dates) {
+        const cell = row.getCell(c);
+        const d = toDate(iso);
+        if (d) { cell.value = d; cell.numFmt = DATE_FMT; }
         cell.alignment = CENTER;
       }
-      // Green when done; red when the due date passed with nothing recorded.
+      // Green once it is done; red when the due date passed with nothing recorded.
       const actualCell = row.getCell(startCol + 2);
-      if (ms.actual) {
-        fill(actualCell, STATUS_FILL.ontrack);
-        actualCell.font = { size: 9, bold: true, name: 'Calibri', color: { argb: STATUS_INK.ontrack } };
+      if (entry.actual) {
+        fill(actualCell, STATUS_FILL.onsite);
+        actualCell.font = body({ bold: true });
       } else {
-        const due = ms.forecast || ms.plan;
+        const due = entry.forecast || entry.plan;
         if (due && due < todayStr) {
           fill(actualCell, STATUS_FILL.late);
-          actualCell.font = { size: 9, bold: true, name: 'Calibri', color: { argb: STATUS_INK.late } };
+          actualCell.font = body({ bold: true, color: { argb: STATUS_INK.late } });
         }
       }
-      // Flag a forecast that moved beyond the plan.
-      if (!ms.actual && ms.plan && ms.forecast && ms.forecast > ms.plan) {
+      // A forecast that moved past the plan is worth flagging on its own.
+      if (!entry.actual && entry.plan && entry.forecast && entry.forecast > entry.plan) {
         const fc = row.getCell(startCol + 1);
         fill(fc, STATUS_FILL.atrisk);
-        fc.font = { size: 9, bold: true, name: 'Calibri', color: { argb: STATUS_INK.atrisk } };
+        fc.font = body({ bold: true });
       }
     };
 
@@ -480,155 +691,179 @@ function buildMilestones(
 
     const prog = row.getCell(12);
     prog.value = item.progress / 100;
-    prog.numFmt = '0%';
+    prog.numFmt = PCT_FMT;
     prog.alignment = CENTER;
 
-    row.getCell(13).value = [item.fat.note, item.rts.note, item.mos.note].filter(Boolean).join(' · ');
+    const notes = [item.fat.note, item.rts.note, item.mos.note].filter(Boolean).join('; ');
+    if (notes) row.getCell(13).value = notes;
 
-    row.eachCell({ includeEmpty: true }, cell => {
-      cell.border = thinBorder();
-      if (!cell.font?.bold) cell.font = { size: 9, name: 'Calibri', color: { argb: INK } };
+    for (let c = 1; c <= span; c++) {
+      const cell = row.getCell(c);
+      cell.border = rule('thin', c === 1 ? 'medium' : 'thin', 'thin', c === span ? 'medium' : 'thin');
+      if (!cell.font?.bold) cell.font = body();
       if (!cell.alignment) cell.alignment = LEFT;
-    });
+    }
     row.getCell(1).alignment = LEFT;
     row.getCell(2).alignment = LEFT;
     row.getCell(13).alignment = LEFT;
-    row.height = 22;
     r++;
   }
 
-  sheet.autoFilter = { from: { row: 6, column: 1 }, to: { row: 6, column: widths.length } };
+  /* Close the table off with a medium rule. */
+  for (let c = 1; c <= span; c++) {
+    const cell = sheet.getCell(r - 1, c);
+    cell.border = { ...cell.border, bottom: { style: 'medium', color: { argb: BLACK } } };
+  }
+
+  printSetup(sheet, 5, `${project?.name ?? 'Procurement'} | milestone`);
 }
 
 /* ─────────────── Sheet 4 · Vendor ─────────────── */
 
 function buildVendors(
   wb: ExcelJS.Workbook,
+  project: Project | null,
   items: ProcurementItem[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('VENDORS', {
-    views: [{ state: 'frozen', ySplit: 5 }],
-    pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-  });
-  const widths = [30, 8, 14, 14, 14, 42];
+  const sheet = wb.addWorksheet('Vendor', sheetOptions({ y: 4 }));
+  const widths = [28, 7, 13, 13, 12, 44];
   sheet.columns = widths.map(w => ({ width: w }));
+  const span = widths.length;
 
-  writeTitle(sheet, widths.length, 'VENDOR SUMMARY', 'Ordered by impact on the schedule', revision);
+  writeCaption(
+    sheet, span,
+    'Vendor Recap',
+    'Sorted by impact on the schedule, worst first',
+    docNumber(project, revision), revision,
+  );
 
-  const head = sheet.getRow(5);
-  ['VENDOR', 'ITEMS', 'AVG. READINESS', 'AVG. SLIP (DAYS)', 'WORST STATUS', 'ITEMS HELD']
+  const head = sheet.getRow(4);
+  ['Supplier / Vendor Name', 'Items', 'Avg. Readiness', 'Avg. Slip (days)', 'Worst Status', 'Items Held']
     .forEach((h, i) => { head.getCell(i + 1).value = h; });
-  styleHeaderRow(head, 28);
+  styleHead(head, span, 26, c => (c <= 2 ? GREY : c === 5 ? YELLOW : CYAN));
 
-  let r = 6;
-  for (const v of vendorStats(items)) {
+  let r = 5;
+  const stats = vendorStats(items);
+  for (const v of stats) {
     const row = sheet.getRow(r);
     row.getCell(1).value = v.vendor;
     row.getCell(2).value = v.items;
     row.getCell(3).value = v.avgReadiness;
-    row.getCell(3).numFmt = '0%';
+    row.getCell(3).numFmt = PCT_FMT;
     row.getCell(4).value = v.avgSlipDays;
     row.getCell(5).value = STATUS_LABELS[v.worstStatus];
-    row.getCell(6).value = v.itemNames.join(' · ');
+    row.getCell(6).value = v.itemNames.join(', ');
 
-    row.eachCell({ includeEmpty: true }, cell => {
-      cell.border = thinBorder();
-      cell.font = { size: 9, name: 'Calibri', color: { argb: INK } };
+    for (let c = 1; c <= span; c++) {
+      const cell = row.getCell(c);
+      cell.border = rule(
+        'thin', c === 1 ? 'medium' : 'thin',
+        r === stats.length + 4 ? 'medium' : 'thin',
+        c === span ? 'medium' : 'thin',
+      );
+      cell.font = body();
       cell.alignment = CENTER;
-    });
+    }
     row.getCell(1).alignment = LEFT;
-    row.getCell(1).font = { size: 9, bold: true, name: 'Calibri', color: { argb: INK } };
+    row.getCell(1).font = body({ bold: true });
     row.getCell(6).alignment = LEFT;
 
     const statusCell = row.getCell(5);
     fill(statusCell, STATUS_FILL[v.worstStatus]);
-    statusCell.font = { size: 9, bold: true, name: 'Calibri', color: { argb: STATUS_INK[v.worstStatus] } };
+    statusCell.font = body({ bold: true, color: { argb: STATUS_INK[v.worstStatus] } });
 
-    if (v.avgSlipDays > 0) {
-      row.getCell(4).font = { size: 9, bold: true, name: 'Calibri', color: { argb: STATUS_INK.late } };
-    }
-    if (v.avgReadiness < 0.9) {
-      row.getCell(3).font = { size: 9, bold: true, name: 'Calibri', color: { argb: STATUS_INK.atrisk } };
-    }
-    row.height = 20;
+    if (v.avgSlipDays > 0) row.getCell(4).font = body({ bold: true });
+    if (v.avgReadiness < 0.9) fill(row.getCell(3), CREAM);
     r++;
   }
 
-  sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: widths.length } };
+  printSetup(sheet, 4, `${project?.name ?? 'Procurement'} | vendor`);
 }
 
-/* ─────────────── Sheet 5 · Anomali ─────────────── */
+/* ─────────────── Sheet 5 · Findings ─────────────── */
 
-function buildAnomalies(
+function buildFindings(
   wb: ExcelJS.Workbook,
+  project: Project | null,
   items: ProcurementItem[],
   anomalies: Anomaly[],
   revision: number,
 ): void {
-  const sheet = wb.addWorksheet('ANOMALIES', {
-    views: [{ state: 'frozen', ySplit: 5 }],
-    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
-  });
-  const widths = [11, 30, 24, 16, 22, 56];
+  const sheet = wb.addWorksheet('Findings', sheetOptions({ y: 4 }));
+  const widths = [6, 11, 28, 22, 15, 22, 50];
   sheet.columns = widths.map(w => ({ width: w }));
+  const span = widths.length;
 
-  writeTitle(sheet, widths.length, 'DETECTED ANOMALIES', 'Derived automatically from milestone dates, document readiness and PO status', revision);
+  writeCaption(
+    sheet, span,
+    'Open Findings',
+    'Read off the milestone dates, document readiness and PO status',
+    docNumber(project, revision), revision,
+  );
 
-  const head = sheet.getRow(5);
-  ['SEVERITY', 'EQUIPMENT / MATERIAL', 'VENDOR', 'PO NO', 'FINDING', 'DETAIL']
+  const head = sheet.getRow(4);
+  ['No', 'Severity', 'Equipment / Material', 'Supplier / Vendor Name', 'PO No.', 'Finding', 'Detail']
     .forEach((h, i) => { head.getCell(i + 1).value = h; });
-  styleHeaderRow(head, 24);
+  styleHead(head, span, 22, c => (c === 2 ? YELLOW : GREY));
 
   if (!anomalies.length) {
-    sheet.mergeCells(6, 1, 6, widths.length);
-    const c = sheet.getCell(6, 1);
-    c.value = 'No anomalies detected. Every item is on schedule.';
-    c.font = { size: 10, bold: true, name: 'Calibri', color: { argb: STATUS_INK.ontrack } };
-    fill(c, STATUS_FILL.ontrack);
-    c.alignment = CENTER;
-    c.border = thinBorder();
-    sheet.getRow(6).height = 24;
+    sheet.mergeCells(5, 1, 5, span);
+    const c = sheet.getCell(5, 1);
+    c.value = 'Nothing outstanding at this revision.';
+    c.font = body();
+    c.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+    for (let i = 1; i <= span; i++) {
+      sheet.getCell(5, i).border = rule('thin', i === 1 ? 'medium' : 'thin', 'medium', i === span ? 'medium' : 'thin');
+    }
+    sheet.getRow(5).height = 18;
+    printSetup(sheet, 4, `${project?.name ?? 'Procurement'} | findings`);
     return;
   }
 
   const byId = new Map(items.map(i => [i.id, i]));
-  let r = 6;
-  for (const a of anomalies) {
+  let r = 5;
+  anomalies.forEach((a, idx) => {
     const item = byId.get(a.itemId);
     const row = sheet.getRow(r);
-    row.getCell(1).value = a.severity === 'crit' ? 'CRITICAL' : 'ATTENTION';
-    row.getCell(2).value = item?.desc ?? '—';
-    row.getCell(3).value = item?.vendor ?? '—';
-    row.getCell(4).value = item?.poNo || '—';
-    row.getCell(5).value = a.title;
-    row.getCell(6).value = a.detail;
+    row.getCell(1).value = idx + 1;
+    row.getCell(2).value = a.severity === 'crit' ? 'CRITICAL' : 'Attention';
+    if (item?.desc) row.getCell(3).value = item.desc;
+    if (item?.vendor) row.getCell(4).value = item.vendor;
+    if (item?.poNo) row.getCell(5).value = item.poNo;
+    row.getCell(6).value = a.title;
+    row.getCell(7).value = a.detail;
 
-    row.eachCell({ includeEmpty: true }, cell => {
-      cell.border = thinBorder();
-      cell.font = { size: 9, name: 'Calibri', color: { argb: INK } };
+    for (let c = 1; c <= span; c++) {
+      const cell = row.getCell(c);
+      cell.border = rule(
+        'thin', c === 1 ? 'medium' : 'thin',
+        idx === anomalies.length - 1 ? 'medium' : 'thin',
+        c === span ? 'medium' : 'thin',
+      );
+      cell.font = body();
       cell.alignment = LEFT;
-    });
+    }
+    row.getCell(1).alignment = CENTER;
 
-    const sev = row.getCell(1);
+    const sev = row.getCell(2);
     sev.alignment = CENTER;
     fill(sev, a.severity === 'crit' ? STATUS_FILL.late : STATUS_FILL.atrisk);
-    sev.font = {
-      size: 9, bold: true, name: 'Calibri',
-      color: { argb: a.severity === 'crit' ? STATUS_INK.late : STATUS_INK.atrisk },
-    };
-    row.getCell(2).font = { size: 9, bold: true, name: 'Calibri', color: { argb: INK } };
-    row.height = 26;
+    sev.font = body({
+      bold: true,
+      color: { argb: a.severity === 'crit' ? STATUS_INK.late : BLACK },
+    });
+    row.getCell(3).font = body({ bold: true });
     r++;
-  }
+  });
 
-  sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: widths.length } };
+  printSetup(sheet, 4, `${project?.name ?? 'Procurement'} | findings`);
 }
 
 /* ─────────────── Entry point ─────────────── */
 
 function safeFileName(text: string): string {
-  return text.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, '_').slice(0, 60) || 'PROCUREMENT';
+  return text.replace(/[\\/:*?"<>|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60) || 'Procurement';
 }
 
 export interface ExportResult {
@@ -638,13 +873,13 @@ export interface ExportResult {
 
 /**
  * Stamped on workbooks this app writes. The importer reads it so a re-import
- * takes items from MONITORING only, instead of also scraping the MILESTONE and
- * ANOMALI sheets — which list the same equipment and would arrive as junk rows.
+ * takes items from Monitoring only, instead of also scraping the Milestone and
+ * Findings sheets — which list the same equipment and would arrive as junk rows.
  */
 export const EXPORT_MARKER = 'figtries-procurement-export';
 
 /** Sheet holding the authoritative item rows in our own exports. */
-export const PRIMARY_SHEET = 'MONITORING';
+export const PRIMARY_SHEET = 'Monitoring';
 
 /** Assemble the workbook. Kept free of browser APIs so it can run anywhere. */
 export function buildWorkbook(
@@ -655,23 +890,27 @@ export function buildWorkbook(
   const anomalies = detectAnomalies(items);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Figtries Procurement';
+  wb.creator = project?.pic || 'Procurement';
+  wb.company = project?.client || '';
+  wb.lastModifiedBy = project?.pic || 'Procurement';
   wb.created = new Date();
-  wb.title = `Procurement Monitoring — ${project?.name ?? 'All projects'}`;
+  wb.title = `Procurement Monitoring Dashboard - ${project?.name ?? 'All projects'}`;
+  wb.subject = docNumber(project, revision);
   wb.category = EXPORT_MARKER;
 
   buildSummary(wb, project, items, anomalies, revision);
   buildMonitoring(wb, project, items, revision);
   buildMilestones(wb, project, items, revision);
-  buildVendors(wb, items, revision);
-  buildAnomalies(wb, items, anomalies, revision);
+  buildVendors(wb, project, items, revision);
+  buildFindings(wb, project, items, anomalies, revision);
 
   return wb;
 }
 
 export function exportFileName(project: Project | null, revision: number): string {
-  const stamp = today().replace(/-/g, '');
-  return `PROCUREMENT_${safeFileName(project?.name ?? 'ALL')}_rev${revision}_${stamp}.xlsx`;
+  const rev = String(revision).padStart(2, '0');
+  const stamp = shortDate(today()).replace(/\//g, '');
+  return `Procurement Monitoring Dashboard ${safeFileName(project?.name ?? 'All Projects')}_rev${rev}_${stamp}.xlsx`;
 }
 
 /**
