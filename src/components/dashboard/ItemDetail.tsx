@@ -76,14 +76,19 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
         <CardContent>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <StatusBadge status={item.status} />
-              <h1 className="mt-2.5 text-xl font-semibold leading-tight tracking-tight text-balance sm:text-2xl">
+              {/* Discipline leads, status follows — what the item *is* before
+                  how it is doing. The title is left to carry the description
+                  alone rather than opening with a chip. */}
+              <div className="flex flex-wrap items-center gap-2">
                 <span
-                  className="mr-2 inline-block rounded px-2 py-0.5 align-middle text-[11px] font-bold"
+                  className="inline-block rounded px-2 py-0.5 text-[11px] font-bold"
                   style={{ background: discStyle.bg, color: discStyle.color }}
                 >
                   {item.discipline}
                 </span>
+                <StatusBadge status={item.status} />
+              </div>
+              <h1 className="mt-2.5 text-xl font-semibold leading-tight tracking-tight text-balance sm:text-2xl">
                 {item.desc}
               </h1>
             </div>
