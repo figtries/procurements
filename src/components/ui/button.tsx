@@ -49,6 +49,9 @@ function Button({
   return (
     <ButtonPrimitive
       data-slot="button"
+      // Surfaced so stylesheets can react to the size — the coarse-pointer
+      // rules in globals.css grow the hit area per size.
+      data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

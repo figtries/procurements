@@ -126,8 +126,11 @@ export default function ItemFormModal({
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
-      <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-2xl">
-        <DialogHeader className="border-b p-4">
+      {/* Flex column rather than the default grid, so the body takes whatever
+          height is left after the header and footer instead of being told a
+          magic number that only holds at one viewport size. */}
+      <DialogContent className="flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-2xl">
+        <DialogHeader className="shrink-0 border-b p-4">
           <DialogTitle>
             {editingItem ? 'Edit Procurement Item' : 'Add Procurement Item'}
           </DialogTitle>
@@ -136,7 +139,7 @@ export default function ItemFormModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[calc(90svh-11rem)] space-y-5 overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4">
           {/* ── Equipment ── */}
           <SectionLabel>Equipment</SectionLabel>
 
@@ -303,7 +306,7 @@ export default function ItemFormModal({
           ))}
         </div>
 
-        <DialogFooter className="m-0 rounded-none">
+        <DialogFooter className="m-0 shrink-0 rounded-none">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave}>Save</Button>
         </DialogFooter>

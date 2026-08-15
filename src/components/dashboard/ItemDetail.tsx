@@ -77,7 +77,7 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
               <StatusBadge status={item.status} />
-              <h1 className="mt-2.5 text-2xl font-semibold leading-tight tracking-tight">
+              <h1 className="mt-2.5 text-xl font-semibold leading-tight tracking-tight text-balance sm:text-2xl">
                 <span
                   className="mr-2 inline-block rounded px-2 py-0.5 align-middle text-[11px] font-bold"
                   style={{ background: discStyle.bg, color: discStyle.color }}
@@ -87,12 +87,14 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
                 {item.desc}
               </h1>
             </div>
-            <div className="flex shrink-0 gap-2">
-              <Button variant="outline" size="sm" onClick={() => onEdit(item)}>
+            {/* Side by side and full width on a phone, so neither action ends
+                up as a lone stub on its own line. */}
+            <div className="flex w-full shrink-0 gap-2 sm:w-auto">
+              <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => onEdit(item)}>
                 <Pencil className="size-3.5" />
                 Edit
               </Button>
-              <Button variant="destructive" size="sm" onClick={() => onDelete(item)}>
+              <Button variant="destructive" size="sm" className="flex-1 sm:flex-none" onClick={() => onDelete(item)}>
                 <Trash2 className="size-3.5" />
                 Delete
               </Button>
@@ -102,7 +104,7 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
           <Separator className="my-5" />
 
           {/* Progress + readiness */}
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-5 sm:grid-cols-2 sm:gap-6">
             <div>
               <div className="mb-2 flex items-baseline justify-between gap-3">
                 <div>
@@ -133,13 +135,18 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
 
           <Separator className="my-5" />
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 lg:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 sm:gap-x-6 xl:grid-cols-4">
             {fields.map(f => (
-              <div key={f.label}>
+              <div key={f.label} className="min-w-0">
                 <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {f.label}
                 </dt>
-                <dd className={cn('mt-1 text-sm font-medium', !f.value && 'text-muted-foreground')}>
+                {/* DO numbers and contract references run long and have no
+                    spaces to break on — let them wrap mid-token. */}
+                <dd className={cn(
+                  'mt-1 text-sm font-medium break-words',
+                  !f.value && 'text-muted-foreground',
+                )}>
                   {f.value || '—'}
                 </dd>
               </div>

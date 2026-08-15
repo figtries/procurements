@@ -19,7 +19,6 @@ import { Button } from '@/components/ui/button';
 import {
   Card, CardAction, CardContent, CardHeader, CardTitle,
 } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -53,6 +52,11 @@ const MS_ACCENT: Record<string, string> = {
   rts: 'bg-rts-bg text-rts-fg',
   mos: 'bg-ontrack-bg text-ontrack-fg',
 };
+
+/** Readiness rail colour — shared by the vendor table and its phone stack. */
+function readinessTone(pct: number) {
+  return pct < 50 ? 'bg-late' : pct < 90 ? 'bg-atrisk' : 'bg-ontrack';
+}
 
 export default function DashboardPage({
   project, items, onOpenItem, onImport,
@@ -91,8 +95,8 @@ export default function DashboardPage({
   const behind       = deviation.deviation < 0;
 
   const header = (
-    <div className="mb-6">
-      <h1 className="text-3xl font-semibold tracking-tight">Dashboard</h1>
+    <div className="mb-5 sm:mb-6">
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Dashboard</h1>
     </div>
   );
 
@@ -118,24 +122,23 @@ export default function DashboardPage({
     <div>
       {header}
 
-      {/* ── Deviasi + kurva-S ── */}
-      <div className="grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)]">
+      {/* ── Deviasi + kurva-S ──
+          Side by side only from xl: at lg the sidebar has already claimed
+          16rem, and splitting what is left would squeeze the curve into a
+          box too narrow to read. */}
+      <div className="grid gap-3 sm:gap-4 xl:grid-cols-[16.5rem_minmax(0,1fr)]">
         <Card>
+          <CardHeader>
+            <CardTitle>Deviation against Plan</CardTitle>
+          </CardHeader>
           <CardContent className="flex h-full flex-col">
             <p className={cn(
-              'text-[11px] font-semibold uppercase tracking-wider',
-              behind ? 'text-atrisk-fg' : 'text-ontrack-fg',
-            )}>
-              Deviation against plan
-            </p>
-
-            <p className={cn(
-              'mt-3 text-5xl font-semibold leading-none tracking-tighter tabular',
-              behind ? 'text-atrisk-fg' : 'text-ontrack-fg',
+              'text-3xl font-semibold leading-none tracking-tight tabular sm:text-4xl',
+              behind ? 'text-late' : 'text-ontrack',
             )}>
               {deviation.deviation > 0 ? '+' : deviation.deviation < 0 ? '−' : ''}
               {Math.abs(deviation.deviation)}
-              <span className="text-2xl tracking-tight">%</span>
+              <span className="text-xl">%</span>
             </p>
 
             <p className="mt-2.5 text-sm text-muted-foreground">
@@ -143,7 +146,7 @@ export default function DashboardPage({
                 <>
                   Actual is behind the planned curve
                   {deviation.slipDays > 0 && (
-                    <> — roughly <span className="font-medium text-foreground">{deviation.slipDays} days</span> behind</>
+                    <> roughly <span className="font-medium text-foreground">{deviation.slipDays} days</span> behind</>
                   )}.
                 </>
               ) : deviation.deviation > 0
@@ -151,23 +154,21 @@ export default function DashboardPage({
                 : 'Actual sits exactly on the planned curve.'}
             </p>
 
-            <Separator className="my-5" />
-
-            <div className="grid grid-cols-2 gap-4">
+            <div className="mt-5 grid grid-cols-2 gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Planned</p>
-                <p className="mt-1 text-2xl font-semibold tracking-tight text-muted-foreground tabular">
+                <p className="mt-1 text-xl font-semibold tracking-tight text-muted-foreground tabular">
                   {deviation.planPct}%
                 </p>
               </div>
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Actual</p>
-                <p className="mt-1 text-2xl font-semibold tracking-tight tabular">{deviation.actualPct}%</p>
+                <p className="mt-1 text-xl font-semibold tracking-tight tabular">{deviation.actualPct}%</p>
               </div>
             </div>
 
             <div className="mt-5 space-y-2.5">
-              <Bar label="Plan" value={deviation.planPct} className="bg-muted-foreground/60" />
+              <Bar label="Plan" value={deviation.planPct} className="bg-late" />
               <Bar label="Act"  value={deviation.actualPct} className="bg-onsite" />
             </div>
 
@@ -185,12 +186,14 @@ export default function DashboardPage({
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="max-sm:grid-cols-1!">
             <CardTitle>S-Curve · Plan vs Actual</CardTitle>
-            <CardAction className="hidden gap-4 sm:flex">
-              <Legend swatch="bg-muted-foreground" label="Plan" />
+            {/* On a phone the legend drops below the title rather than
+                competing with it for the same row. */}
+            <CardAction className="flex flex-wrap gap-x-4 gap-y-1.5 max-sm:col-start-1 max-sm:row-start-2 max-sm:mt-2 max-sm:justify-self-start">
+              <Legend swatch="bg-late" label="Plan" />
               <Legend swatch="bg-onsite" label="Actual" />
-              <Legend swatch="bg-rts" label="Forecast" />
+              <Legend swatch="bg-ontrack" label="Forecast" />
             </CardAction>
           </CardHeader>
           <CardContent>
@@ -199,9 +202,12 @@ export default function DashboardPage({
         </Card>
       </div>
 
-      {/* ── Tiles ── */}
-      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+      {/* ── Tiles ──
+          Five tiles never divide evenly into two columns, so on a phone the
+          total takes the full width and the four statuses pair off below it. */}
+      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:mt-4 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
         <StatTile
+          className="col-span-2 md:col-span-1"
           label="Total items" value={items.length}
           sub={`${disciplines.length} disciplines · ${uniqueVendors} vendors`} variant="accent"
         />
@@ -210,7 +216,10 @@ export default function DashboardPage({
           sub={`${Math.round((counts.onsite / items.length) * 100)}% delivered`}
           variant={counts.onsite > 0 ? 'good' : 'default'}
         />
-        <StatTile label="On Track" value={counts.ontrack} sub="On schedule" />
+        <StatTile
+          label="On Track" value={counts.ontrack} sub="On schedule"
+          variant={counts.ontrack > 0 ? 'info' : 'default'}
+        />
         <StatTile
           label="At Risk" value={counts.atrisk} sub="FAT within 14 days"
           variant={counts.atrisk > 0 ? 'warn' : 'default'}
@@ -222,7 +231,7 @@ export default function DashboardPage({
       </div>
 
       {/* ── Milestone + disiplin ── */}
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_minmax(0,1fr)]">
+      <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[1.25fr_minmax(0,1fr)]">
         <Card>
           <CardHeader>
             <CardTitle>Milestone position</CardTitle>
@@ -233,11 +242,11 @@ export default function DashboardPage({
               return (
                 <div key={ms.key} className="space-y-2">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="flex items-center gap-2 text-sm font-medium">
-                      <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide', MS_ACCENT[ms.key])}>
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                      <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide', MS_ACCENT[ms.key])}>
                         {ms.label}
                       </span>
-                      <span className="text-muted-foreground">{ms.name}</span>
+                      <span className="truncate text-muted-foreground">{ms.name}</span>
                     </span>
                     <span className="shrink-0 text-sm font-semibold tabular">
                       {ms.done}<span className="font-normal text-muted-foreground"> / {ms.total}</span>
@@ -313,12 +322,14 @@ export default function DashboardPage({
       </div>
 
       {/* ── Lookahead ── */}
-      <Card className="mt-4">
-        <CardHeader>
+      <Card className="mt-3 sm:mt-4">
+        <CardHeader className="max-sm:grid-cols-1!">
           <CardTitle>Falling due next</CardTitle>
-          <CardAction>
+          {/* Full-width segmented control on a phone: the three horizons
+              would otherwise crowd the title off its own row. */}
+          <CardAction className="max-sm:col-start-1 max-sm:row-start-2 max-sm:mt-3 max-sm:w-full">
             <Tabs value={weeks} onValueChange={v => startLookahead(() => setWeeks(v))}>
-              <TabsList>
+              <TabsList className="max-sm:w-full">
                 {LOOKAHEAD_OPTIONS.map(o => (
                   <TabsTrigger key={o.weeks} value={o.weeks}>{o.label}</TabsTrigger>
                 ))}
@@ -409,7 +420,7 @@ export default function DashboardPage({
       </Card>
 
       {/* ── Anomali ── */}
-      <Card className="mt-4">
+      <Card className="mt-3 sm:mt-4">
         <CardHeader>
           <CardTitle>Detected anomalies</CardTitle>
           <CardAction>
@@ -448,7 +459,7 @@ export default function DashboardPage({
       </Card>
 
       {/* ── Vendor ── */}
-      <Card className="mt-4">
+      <Card className="mt-3 sm:mt-4">
         <CardHeader className="border-b">
           <CardTitle>Vendor Watchlist</CardTitle>
           <CardAction>
@@ -456,7 +467,43 @@ export default function DashboardPage({
           </CardAction>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
+          {/* Phone: the same five figures stacked. A five-column table on a
+              360px screen is a sideways scroll and nothing else. */}
+          <div className="divide-y md:hidden">
+            {topVendors.map(v => {
+              const pct = Math.round(v.avgReadiness * 100);
+              return (
+                <div key={v.vendor} className="space-y-2.5 py-3 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{v.vendor}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {v.items} item{v.items === 1 ? '' : 's'} · {v.itemNames.slice(0, 2).join(' · ')}
+                      </p>
+                    </div>
+                    <StatusBadge status={v.worstStatus} className="shrink-0" />
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className={cn('h-full rounded-full transition-[width] duration-500', readinessTone(pct))}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="shrink-0 text-xs font-medium tabular">{pct}%</span>
+                    <span className={cn(
+                      'shrink-0 text-xs font-medium tabular',
+                      v.avgSlipDays > 0 && 'text-late-fg',
+                    )}>
+                      {v.avgSlipDays > 0 ? `+${v.avgSlipDays}d` : 'On time'}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
             <Table className="[&_th]:h-9">
               <TableHeader>
                 <TableRow>
@@ -487,10 +534,7 @@ export default function DashboardPage({
                         <div className="flex items-center gap-2">
                           <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
                             <div
-                              className={cn(
-                                'h-full rounded-full transition-[width] duration-500',
-                                pct < 50 ? 'bg-late' : pct < 90 ? 'bg-atrisk' : 'bg-ontrack',
-                              )}
+                              className={cn('h-full rounded-full transition-[width] duration-500', readinessTone(pct))}
                               style={{ width: `${pct}%` }}
                             />
                           </div>

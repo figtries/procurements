@@ -1,7 +1,18 @@
-import type { SCurvePoint } from '@/lib/procurement';
+'use client';
 
-/* Plot area inside the 640×216 viewBox. */
-const X0 = 44, X1 = 620, Y0 = 190, Y1 = 16;
+import type { SCurvePoint } from '@/lib/procurement';
+import { useMediaQuery } from '@/hooks/use-mobile';
+
+/**
+ * Plot geometry inside the viewBox. The wide box is drawn for a card that has
+ * real width; below `sm` the card is barely wider than a phone, and scaling
+ * the wide box down would shrink the axis type to about five pixels — so a
+ * narrower box is drawn instead, which scales *up* and keeps the type legible.
+ */
+const GEOMETRY = {
+  full:    { w: 640, h: 216, X0: 44, X1: 620, Y0: 190, Y1: 16, tick: 207, labels: 12, minW: 'min-w-[520px]', gap: 7 },
+  compact: { w: 320, h: 200, X0: 26, X1: 312, Y0: 170, Y1: 12, tick: 191, labels: 5,  minW: '',              gap: 5 },
+} as const;
 
 interface SCurveChartProps {
   points: SCurvePoint[];
@@ -12,6 +23,9 @@ interface SCurveChartProps {
  * Drawn as inline SVG against theme tokens so it tracks light and dark.
  */
 export default function SCurveChart({ points }: SCurveChartProps) {
+  const compact = useMediaQuery('(max-width: 39.99rem)');
+  const g = compact ? GEOMETRY.compact : GEOMETRY.full;
+
   if (points.length < 2) {
     return (
       <div className="rounded-lg bg-muted/50 px-4 py-12 text-center text-sm text-muted-foreground">
@@ -20,9 +34,9 @@ export default function SCurveChart({ points }: SCurveChartProps) {
     );
   }
 
-  const step = (X1 - X0) / (points.length - 1);
-  const x = (i: number) => X0 + i * step;
-  const y = (pct: number) => Y0 - (pct / 100) * (Y0 - Y1);
+  const step = (g.X1 - g.X0) / (points.length - 1);
+  const x = (i: number) => g.X0 + i * step;
+  const y = (pct: number) => g.Y0 - (pct / 100) * (g.Y0 - g.Y1);
 
   const line = (pick: (p: SCurvePoint) => number | null) =>
     points
@@ -39,17 +53,16 @@ export default function SCurveChart({ points }: SCurveChartProps) {
   const lastActual = lastActualIdx >= 0 ? points[lastActualIdx] : null;
 
   const areaPath = actPath
-    ? `${actPath} L${x(lastActualIdx).toFixed(1)},${Y0} L${X0},${Y0} Z`
+    ? `${actPath} L${x(lastActualIdx).toFixed(1)},${g.Y0} L${g.X0},${g.Y0} Z`
     : '';
 
   // Label every month when there is room, otherwise thin them out.
-  const labelEvery = points.length > 14 ? Math.ceil(points.length / 12) : 1;
-
+  const labelEvery = points.length > g.labels + 2 ? Math.ceil(points.length / g.labels) : 1;
   return (
     <div className="-mx-1 overflow-x-auto px-1">
       <svg
-        viewBox="0 0 640 216"
-        className="block h-auto w-full min-w-[520px]"
+        viewBox={`0 0 ${g.w} ${g.h}`}
+        className={`block h-auto w-full ${g.minW}`}
         role="img"
         aria-label={
           lastActual && lastActual.actual !== null
@@ -67,11 +80,11 @@ export default function SCurveChart({ points }: SCurveChartProps) {
         {[0, 25, 50, 75, 100].map(pct => (
           <g key={pct}>
             <line
-              x1={X0} y1={y(pct)} x2={X1} y2={y(pct)}
+              x1={g.X0} y1={y(pct)} x2={g.X1} y2={y(pct)}
               stroke="var(--border)" strokeWidth={1}
             />
             <text
-              x={X0 - 8} y={y(pct) + 4} textAnchor="end"
+              x={g.X0 - 6} y={y(pct) + 3.5} textAnchor="end"
               className="fill-muted-foreground text-[10px] font-semibold tabular"
             >
               {pct}
@@ -83,13 +96,13 @@ export default function SCurveChart({ points }: SCurveChartProps) {
 
         <path
           d={planPath} fill="none"
-          stroke="var(--muted-foreground)" strokeWidth={2}
+          stroke="var(--st-late)" strokeWidth={2}
           strokeLinejoin="round" strokeLinecap="round"
         />
         {fcPath && (
           <path
             d={fcPath} fill="none"
-            stroke="var(--ms-rts)" strokeWidth={2}
+            stroke="var(--st-ontrack)" strokeWidth={2}
             strokeDasharray="5 4" strokeLinecap="round"
           />
         )}
@@ -107,11 +120,11 @@ export default function SCurveChart({ points }: SCurveChartProps) {
             <line
               x1={x(lastActualIdx)} y1={y(lastActual.plan)}
               x2={x(lastActualIdx)} y2={y(lastActual.actual)}
-              stroke="var(--st-atrisk)" strokeWidth={7} strokeLinecap="round" opacity={0.5}
+              stroke="var(--st-atrisk)" strokeWidth={g.gap} strokeLinecap="round" opacity={0.5}
             />
             <circle
               cx={x(lastActualIdx)} cy={y(lastActual.plan)} r={3.5}
-              fill="var(--background)" stroke="var(--muted-foreground)" strokeWidth={2}
+              fill="var(--background)" stroke="var(--st-late)" strokeWidth={2}
             />
             <circle
               cx={x(lastActualIdx)} cy={y(lastActual.actual)} r={5.5}
@@ -123,7 +136,7 @@ export default function SCurveChart({ points }: SCurveChartProps) {
         {points.map((p, i) =>
           i % labelEvery === 0 ? (
             <text
-              key={p.date} x={x(i)} y={207} textAnchor="middle"
+              key={p.date} x={x(i)} y={g.tick} textAnchor="middle"
               className="fill-muted-foreground text-[10px] font-semibold"
             >
               {p.label}

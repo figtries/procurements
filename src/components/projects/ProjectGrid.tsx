@@ -28,8 +28,10 @@ export default function ProjectGrid({
     );
   }
 
+  // One per row, full content width — project names are long enough that any
+  // column split truncates them.
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="flex flex-col gap-3">
       {projects.map(proj => {
         const isActive = activeProjectId === proj.id;
         const itemCount = items.filter(i => i.projectId === proj.id).length;
@@ -38,7 +40,7 @@ export default function ProjectGrid({
           <div
             key={proj.id}
             className={cn(
-              'flex items-center gap-4 rounded-xl bg-card p-4 ring-1 transition-shadow duration-200',
+              'flex items-center gap-3 rounded-xl bg-card p-3.5 ring-1 transition-shadow duration-200 sm:gap-4 sm:p-4',
               isActive
                 ? 'bg-accent shadow-sm ring-primary/40'
                 : 'ring-foreground/10 hover:shadow-sm hover:ring-foreground/25',
@@ -46,19 +48,19 @@ export default function ProjectGrid({
           >
             <button
               onClick={() => onSelect(proj.id)}
-              className="flex min-w-0 flex-1 items-center gap-4 text-left"
+              className="flex min-w-0 flex-1 items-center gap-3 text-left sm:gap-4"
             >
               <span className={cn(
-                'flex size-12 shrink-0 items-center justify-center rounded-xl',
+                'flex size-11 shrink-0 items-center justify-center rounded-xl sm:size-12',
                 isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
               )}>
                 <Folder className="size-5" />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-base font-semibold tracking-tight">
+                <span className="block text-[15px] font-semibold tracking-tight break-words sm:text-base">
                   {proj.name}
                 </span>
-                <span className="mt-1 block truncate text-sm text-muted-foreground">
+                <span className="mt-1 block text-[13px] text-muted-foreground sm:text-sm">
                   {proj.client || 'No client'} · {itemCount} item{itemCount === 1 ? '' : 's'}
                 </span>
               </span>

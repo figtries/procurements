@@ -230,14 +230,51 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* Nothing in this app is meant to scroll sideways at the page level —
+       a stray wide table should scroll inside its own box, not drag the
+       whole layout off the phone screen. */
+    overflow-x: clip;
   }
   html {
     @apply font-sans;
-    scrollbar-gutter: stable;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+  /* Reserving the scrollbar gutter keeps desktop layouts from jumping, but on
+     a phone there is no gutter to reserve — it would just eat content width. */
+  @media (min-width: 64rem) {
+    html {
+      scrollbar-gutter: stable;
+    }
   }
   /* Figures line up in columns all over this app. */
   table, .tabular {
     font-variant-numeric: tabular-nums;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Touch targets
+   The desktop control sizes (h-7 / h-8) are too small for a thumb on a
+   phone or an iPad. Rather than dressing every call site in responsive
+   height classes, grow the shadcn primitives once, wherever the pointer
+   is coarse — which is exactly the condition that matters.
+   ═══════════════════════════════════════════════════════════ */
+@media (pointer: coarse) {
+  [data-slot='button'][data-size='default'],
+  [data-slot='button'][data-size='sm'],
+  [data-slot='button'][data-size='lg'],
+  [data-slot='select-trigger'],
+  [data-slot='input'],
+  [data-slot='tabs-list'],
+  [data-slot='sidebar-menu-button'] {
+    min-height: 2.25rem;
+  }
+  [data-slot='button'][data-size='icon'],
+  [data-slot='button'][data-size='icon-sm'],
+  [data-slot='button'][data-size='icon-lg'] {
+    min-width: 2.25rem;
+    min-height: 2.25rem;
   }
 }
 

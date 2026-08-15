@@ -373,17 +373,23 @@ export default function ProcurementApp() {
       <AppSidebar page={page} attention={attention} onNavigate={nav} />
 
       <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur-sm">
+        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-1 h-4" />
-          <span className="truncate text-sm font-medium">
-            {activeProject?.name ?? 'Procurement'}
-          </span>
-          <span className="text-muted-foreground/50">/</span>
-          <span className="truncate text-sm text-muted-foreground">{PAGE_TITLES[page]}</span>
+          {/* Stacked on a phone, where there is no room for a breadcrumb; the
+              project reads as the title and the page as its caption. */}
+          <div className="flex min-w-0 flex-col justify-center leading-tight sm:flex-row sm:items-center sm:gap-2">
+            <span className="truncate text-sm font-medium">
+              {activeProject?.name ?? 'Procurement'}
+            </span>
+            <span className="hidden text-muted-foreground/50 sm:inline">/</span>
+            <span className="truncate text-[11px] text-muted-foreground sm:text-sm">
+              {PAGE_TITLES[page]}
+            </span>
+          </div>
         </header>
 
-        <main className="mx-auto w-full max-w-[1120px] px-4 pb-24 pt-6 sm:px-6 lg:px-10">
+        <main className="mx-auto w-full max-w-[1120px] px-4 pt-5 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 xl:px-10">
           <ViewTransition key={page} name="app-page" share="auto" enter="auto" exit="auto" default="none">
             <div>
               {page === 'dashboard' && (

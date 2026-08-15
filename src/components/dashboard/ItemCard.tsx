@@ -25,7 +25,7 @@ export default function ItemCard({ item, index = 0, onClick }: ItemCardProps) {
       size="sm"
       style={{ animationDelay: `${Math.min(index, MAX_STAGGER) * 35}ms` }}
       className={cn(
-        'group relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 border-l-[3px] px-4 py-3',
+        'group relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 border-l-[3px] px-3.5 py-3 sm:px-4',
         'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
         'transition-shadow duration-200 hover:shadow-sm hover:ring-foreground/25',
         'has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring',
@@ -79,7 +79,22 @@ export default function ItemCard({ item, index = 0, onClick }: ItemCardProps) {
         {nextMile && <span className="text-[11px] text-muted-foreground">{nextMile}</span>}
       </div>
 
-      <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+      <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
+
+      {/* Phone: status, vendor and progress fold onto a second line rather
+          than disappearing — the schedule state is the whole point of the row. */}
+      <div className="col-span-2 md:hidden">
+        <div className="mb-1.5 flex items-center gap-2">
+          <StatusBadge status={item.status} />
+          <span className="truncate text-xs text-muted-foreground">{item.vendor || '—'}</span>
+          <span className="ml-auto shrink-0 text-xs font-medium tabular">{item.progress}%</span>
+        </div>
+        <Progress
+          value={item.progress}
+          trackClassName="h-1.5"
+          indicatorClassName={cn('transition-[width] duration-500', STATUS_CLASSES[item.status].rail)}
+        />
+      </div>
     </Card>
   );
 }

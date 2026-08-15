@@ -87,8 +87,8 @@ export default function ImportModal({
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
-      <DialogContent className="max-h-[90svh] gap-0 overflow-hidden p-0 sm:max-w-5xl">
-        <DialogHeader className="border-b p-4">
+      <DialogContent className="flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-5xl">
+        <DialogHeader className="shrink-0 border-b p-4">
           <DialogTitle>Import from Excel</DialogTitle>
           <DialogDescription>
             Every sheet is read, header rows are detected, and disciplines are split out of
@@ -96,7 +96,7 @@ export default function ImportModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="max-h-[calc(90svh-11rem)] overflow-y-auto p-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
           {/* ── Drop zone ── */}
           {!result && !reading && (
             <button
@@ -213,19 +213,21 @@ export default function ImportModal({
                 </div>
               </div>
 
-              <div className="max-h-[46vh] overflow-auto rounded-xl border">
+              {/* Only the three columns a reviewer has to act on survive to a
+                  phone; the rest come back once there is room for them. */}
+              <div className="max-h-[50svh] overflow-auto rounded-xl border">
                 <Table>
                   <TableHeader className="sticky top-0 z-10 bg-muted">
                     <TableRow>
                       <TableHead className="w-10" />
-                      <TableHead className="min-w-48">Equipment</TableHead>
+                      <TableHead className="min-w-36 md:min-w-48">Equipment</TableHead>
                       <TableHead className="w-36">Discipline</TableHead>
-                      <TableHead className="min-w-32">Vendor</TableHead>
-                      <TableHead className="w-28">PO No</TableHead>
-                      <TableHead className="w-16 text-center">Rdns</TableHead>
-                      <TableHead className="w-28">FAT</TableHead>
-                      <TableHead className="w-28">Delivery</TableHead>
-                      <TableHead className="min-w-40">Remarks</TableHead>
+                      <TableHead className="hidden min-w-32 sm:table-cell">Vendor</TableHead>
+                      <TableHead className="hidden w-28 sm:table-cell">PO No</TableHead>
+                      <TableHead className="hidden w-16 text-center lg:table-cell">Rdns</TableHead>
+                      <TableHead className="hidden w-28 md:table-cell">FAT</TableHead>
+                      <TableHead className="hidden w-28 md:table-cell">Delivery</TableHead>
+                      <TableHead className="hidden min-w-40 lg:table-cell">Remarks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -252,8 +254,13 @@ export default function ImportModal({
                               aria-label={`Include ${row.desc}`}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell className="whitespace-normal">
                             <p className="font-medium leading-snug">{row.desc}</p>
+                            {/* Vendor and PO have their own columns from sm up;
+                                on a phone they ride along under the name. */}
+                            <p className="mt-1 truncate text-[10.5px] text-muted-foreground sm:hidden">
+                              {row.vendor || '—'}{row.poNo ? ` · ${row.poNo}` : ''}
+                            </p>
                             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[10.5px] text-muted-foreground">
                               {row.sourceSheet} · row {row.sourceRow}
                               {row.matchesItemId && (
@@ -290,19 +297,21 @@ export default function ImportModal({
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          <TableCell className="text-xs">{row.vendor || '—'}</TableCell>
-                          <TableCell className="whitespace-nowrap text-xs tabular">{row.poNo || '—'}</TableCell>
-                          <TableCell className="text-center text-xs tabular">
+                          <TableCell className="hidden text-xs sm:table-cell">{row.vendor || '—'}</TableCell>
+                          <TableCell className="hidden whitespace-nowrap text-xs tabular sm:table-cell">
+                            {row.poNo || '—'}
+                          </TableCell>
+                          <TableCell className="hidden text-center text-xs tabular lg:table-cell">
                             {row.readinessDoc ? `${Math.round(row.readinessDoc * 100)}%` : '—'}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs tabular">
+                          <TableCell className="hidden whitespace-nowrap text-xs tabular md:table-cell">
                             {fatDate ? fmtDate(fatDate) : '—'}
                             {row.fat.actual && <span className="ml-1 font-bold text-ontrack-fg">✓</span>}
                           </TableCell>
-                          <TableCell className="whitespace-nowrap text-xs tabular">
+                          <TableCell className="hidden whitespace-nowrap text-xs tabular md:table-cell">
                             {mosDate ? fmtDate(mosDate) : '—'}
                           </TableCell>
-                          <TableCell className="max-w-56 text-[11.5px] leading-snug text-muted-foreground">
+                          <TableCell className="hidden max-w-56 text-[11.5px] leading-snug text-muted-foreground lg:table-cell">
                             <span className="line-clamp-3">{row.statusNote || '—'}</span>
                           </TableCell>
                         </TableRow>
@@ -315,7 +324,7 @@ export default function ImportModal({
           )}
         </div>
 
-        <DialogFooter className="m-0 rounded-none">
+        <DialogFooter className="m-0 shrink-0 rounded-none">
           <Button variant="outline" onClick={close}>Cancel</Button>
           <Button
             disabled={!selected.length || needsDiscipline > 0}

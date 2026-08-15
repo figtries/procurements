@@ -178,21 +178,28 @@ export default function OverviewPage({
   return (
     <div>
       {/* Header */}
-      <div className="mb-6">
+      <div className="mb-5 sm:mb-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Procurement Overview</h1>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Procurement Overview</h1>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <Button variant="outline" onClick={onImport}>
+          {/* One even row of three on a phone — the word “Excel” is dropped so
+              the labels fit without shrinking the buttons below thumb size. */}
+          <div className="flex w-full shrink-0 gap-2 sm:w-auto sm:flex-wrap">
+            <Button variant="outline" className="flex-1 sm:flex-none" onClick={onImport}>
               <ArrowDownToLine className="size-4" />
-              Import Excel
+              Import<span className="hidden sm:inline">&nbsp;Excel</span>
             </Button>
-            <Button variant="outline" onClick={onExport} disabled={!total || exporting}>
+            <Button
+              variant="outline"
+              className="flex-1 sm:flex-none"
+              onClick={onExport}
+              disabled={!total || exporting}
+            >
               <ArrowUpFromLine className="size-4" />
-              {exporting ? 'Preparing…' : 'Export Excel'}
+              {exporting ? 'Preparing…' : <>Export<span className="hidden sm:inline">&nbsp;Excel</span></>}
             </Button>
-            <Button onClick={onAddItem}>
+            <Button className="flex-1 sm:flex-none" onClick={onAddItem}>
               <Plus className="size-4" />
               Add item
             </Button>
@@ -210,10 +217,13 @@ export default function OverviewPage({
       />
 
       {/* Tiles */}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <StatTile label="Total items" value={total} sub={`${overallProg}% overall`} />
+      <div className="mb-5 grid grid-cols-2 gap-2.5 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <StatTile
+          className="col-span-2 md:col-span-1"
+          label="Total items" value={total} sub={`${overallProg}% overall`}
+        />
         <StatTile label="On Site" value={onsite} sub="Delivered" variant={onsite > 0 ? 'good' : 'default'} />
-        <StatTile label="On Track" value={ontrack} sub="Progressing" />
+        <StatTile label="On Track" value={ontrack} sub="Progressing" variant={ontrack > 0 ? 'info' : 'default'} />
         <StatTile label="At Risk" value={atrisk} sub="Needs review" variant={atrisk > 0 ? 'warn' : 'default'} />
         <StatTile label="Late" value={late} sub="Overdue" variant={late > 0 ? 'crit' : 'default'} />
       </div>
@@ -229,27 +239,28 @@ export default function OverviewPage({
         />
       </div>
 
-      {/* Filters */}
+      {/* Filters — two to a row on a phone, with the long vendor list taking
+          the full width, then a single flowing row from sm up. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <FilterSelect
           items={statusItems}
           value={filterStatus}
           placeholder="All statuses"
-          className="w-[10.5rem]"
+          className="w-[calc(50%-0.25rem)] sm:w-[10.5rem]"
           onChange={v => startFilter(() => onFilterStatus(v))}
         />
         <FilterSelect
           items={toItems(uniqueDiscs, 'All disciplines')}
           value={filterDisc}
           placeholder="All disciplines"
-          className="w-[11rem]"
+          className="w-[calc(50%-0.25rem)] sm:w-[11rem]"
           onChange={v => startFilter(() => onFilterDisc(v))}
         />
         <FilterSelect
           items={toItems(uniqueVendors, 'All vendors')}
           value={filterVendor}
           placeholder="All vendors"
-          className="w-[14rem]"
+          className="w-full sm:w-[14rem]"
           onChange={v => startFilter(() => onFilterVendor(v))}
         />
 
@@ -264,12 +275,16 @@ export default function OverviewPage({
           </Button>
         )}
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <span className="hidden text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline">
             Group by
           </span>
-          <Tabs value={groupBy} onValueChange={v => startFilter(() => onGroupBy(v as GroupBy))}>
-            <TabsList>
+          <Tabs
+            className="max-sm:w-full"
+            value={groupBy}
+            onValueChange={v => startFilter(() => onGroupBy(v as GroupBy))}
+          >
+            <TabsList className="max-sm:w-full">
               <TabsTrigger value="discipline">Discipline</TabsTrigger>
               <TabsTrigger value="status">Status</TabsTrigger>
               <TabsTrigger value="vendor">Vendor</TabsTrigger>
@@ -299,14 +314,16 @@ export default function OverviewPage({
                 return (
                   <section key={group.key}>
                     <div className="mb-2.5 flex items-center gap-2.5">
+                      {/* Vendor names run long — the heading truncates rather
+                          than pushing its own count off the screen. */}
                       <span
-                        className="rounded-md px-2.5 py-1 text-[13px] font-semibold"
+                        className="min-w-0 truncate rounded-md px-2.5 py-1 text-[13px] font-semibold"
                         style={{ background: style.bg, color: style.color }}
                       >
                         {group.label}
                       </span>
                       <span
-                        className="rounded-full px-2.5 py-0.5 text-xs font-semibold tabular"
+                        className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold tabular"
                         style={{ background: style.bg, color: style.color }}
                       >
                         {group.items.length} item{group.items.length === 1 ? '' : 's'}

@@ -32,11 +32,14 @@ export default function ProjectsPage({
 }: ProjectsPageProps) {
   return (
     <div className="">
-      <div className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight">Project Management</h1>
+      <div className="mb-5 sm:mb-6">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Project Management</h1>
       </div>
 
-      <div className="grid items-stretch gap-4 lg:grid-cols-[38%_minmax(0,1fr)]">
+      {/* Split from xl: at lg the sidebar has taken 16rem already, and the
+          create form needs its three-across row more than the page needs
+          two columns. */}
+      <div className="grid items-start gap-3 sm:gap-4 xl:grid-cols-[38%_minmax(0,1fr)]">
         <ProjectHero
           project={activeProject}
           items={items}
@@ -55,16 +58,20 @@ export default function ProjectsPage({
         />
       </div>
 
-      <h2 className="mb-3 mt-8 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-        Saved projects
-      </h2>
-      <ProjectGrid
-        projects={projects}
-        items={items}
-        activeProjectId={activeProjectId}
-        onSelect={onSelectProject}
-        onDelete={onDeleteProject}
-      />
+      {/* Same 38% width as the hero column above, so the saved cards line up
+          with it instead of running the full content width. */}
+      <div className="xl:w-[38%]">
+        <h2 className="mb-3 mt-7 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:mt-8">
+          Saved projects
+        </h2>
+        <ProjectGrid
+          projects={projects}
+          items={items}
+          activeProjectId={activeProjectId}
+          onSelect={onSelectProject}
+          onDelete={onDeleteProject}
+        />
+      </div>
     </div>
   );
 }

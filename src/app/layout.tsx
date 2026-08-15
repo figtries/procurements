@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 // Self-hosted so the app builds and runs without reaching a font CDN —
 // site offices often have poor or filtered connectivity.
 import '@fontsource-variable/inter';
@@ -9,6 +9,18 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 export const metadata: Metadata = {
   title: 'Procurement & Vendor · Figtries',
   description: 'Procurement and vendor management for Figtries projects.',
+  // Site engineers pin this to the home screen; without it iOS shows the
+  // Safari chrome and the sticky header loses its top edge.
+  appleWebApp: { capable: true, statusBarStyle: 'default', title: 'Procurement' },
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  // `cover` lets the layout reach under the notch and home indicator; the
+  // panes that need it pad themselves back with env(safe-area-inset-*).
+  viewportFit: 'cover',
+  themeColor: '#ffffff',
 };
 
 export default function RootLayout({

@@ -53,7 +53,17 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "fixed z-50 grid gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none",
+          // Phone: a bottom sheet. Full-bleed, docked to the bottom edge, and
+          // it rises rather than zooms — the motion the platform trains for.
+          "inset-x-0 bottom-0 max-h-[92svh] rounded-t-2xl duration-200",
+          "data-open:animate-in data-open:fade-in-0 data-open:slide-in-from-bottom-4",
+          "data-closed:animate-out data-closed:fade-out-0 data-closed:slide-out-to-bottom-4",
+          // Tablet and up: the familiar centred card. Auto margins do the
+          // centring, so no transform is left for the zoom to fight with.
+          "sm:inset-0 sm:m-auto sm:h-fit sm:w-[calc(100%-2rem)] sm:max-w-sm sm:rounded-xl sm:duration-100",
+          "sm:data-open:zoom-in-95 sm:data-open:slide-in-from-bottom-0",
+          "sm:data-closed:zoom-out-95 sm:data-closed:slide-out-to-bottom-0",
           className
         )}
         {...props}
@@ -84,7 +94,13 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn(
+        "relative flex flex-col gap-2",
+        // Grab handle for the phone bottom sheet — it reads as draggable even
+        // though dismissal is by tap, and it keeps the sheet from looking cut off.
+        "max-sm:pt-6 max-sm:before:absolute max-sm:before:top-2 max-sm:before:left-1/2 max-sm:before:h-1 max-sm:before:w-9 max-sm:before:-translate-x-1/2 max-sm:before:rounded-full max-sm:before:bg-muted-foreground/25 max-sm:before:content-['']",
+        className
+      )}
       {...props}
     />
   )
@@ -103,6 +119,9 @@ function DialogFooter({
       data-slot="dialog-footer"
       className={cn(
         "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        // The sheet sits on the bottom edge of the phone, so the confirm
+        // buttons have to clear the home indicator.
+        "max-sm:pb-[max(1rem,env(safe-area-inset-bottom))]",
         className
       )}
       {...props}
