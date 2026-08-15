@@ -24,9 +24,14 @@ const NAV = [
 export default function AppSidebar({ page, attention, onNavigate }: AppSidebarProps) {
   const { isMobile, setOpenMobile } = useSidebar();
 
-  /** Below `lg` the nav is a sheet laid over the page, so picking a
+  /** Below `lg` the nav is a drawer laid over the page, so picking a
    *  destination has to dismiss it — otherwise the page you asked for is
-   *  hidden behind the menu you asked it from. */
+   *  hidden behind the menu you asked it from.
+   *
+   *  Dismissing it and swapping the page in the same breath is safe because
+   *  the drawer is portalled outside the part of the tree the page swap
+   *  captures: it keeps rendering live, and slides away over the new page
+   *  rather than being frozen half-open in a snapshot of the old one. */
   function handleNavigate(target: PageName) {
     if (isMobile) setOpenMobile(false);
     onNavigate(target);

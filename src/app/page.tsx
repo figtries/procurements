@@ -119,12 +119,26 @@ export default function ProcurementApp() {
   const attention     = projectItems.filter(i => i.status === 'late' || i.status === 'atrisk').length;
 
   /* ─── Navigation ─── */
+
+  /** Every page swap starts at the top of the page it lands on.
+   *
+   *  Two reasons to reset here rather than after the fact: landing halfway
+   *  down a screen you have never seen reads as a glitch, and the view
+   *  transition snapshots the old page where it currently sits — so the
+   *  scroll has to settle in the same frame the snapshot is taken, or the
+   *  outgoing image animates from one place while the incoming one starts
+   *  from another. */
+  function startPageSwap(update: () => void) {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    startNav(update);
+  }
+
   function nav(p: PageName) {
-    startNav(() => setPage(p));
+    startPageSwap(() => setPage(p));
   }
 
   function openDetail(item: ProcurementItem) {
-    startNav(() => {
+    startPageSwap(() => {
       setDetailItem(item);
       setPage('itemDetail');
     });
@@ -319,7 +333,7 @@ export default function ProcurementApp() {
       setItems(updated);
       saveItems(updated);
       if (detailItem?.id === deleteTarget.id) {
-        startNav(() => {
+        startPageSwap(() => {
           setDetailItem(null);
           setPage('overview');
         });

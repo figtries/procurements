@@ -188,7 +188,7 @@ export default function OverviewPage({
           <div className="flex w-full shrink-0 gap-2 sm:w-auto sm:flex-wrap">
             <Button variant="outline" className="flex-1 sm:flex-none" onClick={onImport}>
               <ArrowDownToLine className="size-4" />
-              Import<span className="hidden sm:inline">&nbsp;Excel</span>
+              <span>Import<span className="hidden sm:inline">&nbsp;Excel</span></span>
             </Button>
             <Button
               variant="outline"
@@ -197,7 +197,7 @@ export default function OverviewPage({
               disabled={!total || exporting}
             >
               <ArrowUpFromLine className="size-4" />
-              {exporting ? 'Preparing…' : <>Export<span className="hidden sm:inline">&nbsp;Excel</span></>}
+              <span>{exporting ? 'Preparing…' : <>Export<span className="hidden sm:inline">&nbsp;Excel</span></>}</span>
             </Button>
             <Button className="flex-1 sm:flex-none" onClick={onAddItem}>
               <Plus className="size-4" />

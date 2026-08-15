@@ -288,41 +288,87 @@
    Motion
    Page, list and tab swaps are driven by React's <ViewTransition>;
    these rules give the browser the actual animation to run.
+
+   Three things separate a clean swap from a smeared one:
+
+   • The shell is not captured. Left named, the document root is snapped
+     too, and the browser then stretches one picture of the entire app
+     between two very different page heights — sidebar, header and all.
+   • The two snapshots never share the screen. The outgoing view is gone
+     before the incoming one starts, so you never read one page through
+     the other, which is what left a ghost of the screen you just left.
+   • The group box does not animate. Pages differ wildly in height, and a
+     box that morphs between the two sizes squashes both snapshots on the
+     way; pinned to its final size, each keeps the shape it was taken in.
    ═══════════════════════════════════════════════════════════ */
 
-::view-transition-old(*),
-::view-transition-new(*) {
-  animation-duration: 220ms;
-  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+/* Only the page area animates; everything around it stays live. */
+:root {
+  view-transition-name: none;
 }
 
+::view-transition-group(app-page),
+::view-transition-group(item-list),
+::view-transition-group(lookahead) {
+  animation: none;
+}
+
+::view-transition-image-pair(app-page),
+::view-transition-image-pair(item-list),
+::view-transition-image-pair(lookahead) {
+  /* The UA isolates the pair so an overlapping crossfade can hold its
+     brightness through plus-lighter. Nothing overlaps here, and that
+     blend only washes out the colours it touches. */
+  isolation: auto;
+}
+
+::view-transition-old(app-page),
+::view-transition-new(app-page),
+::view-transition-old(item-list),
+::view-transition-new(item-list),
+::view-transition-old(lookahead),
+::view-transition-new(lookahead) {
+  mix-blend-mode: normal;
+  /* Grow and shrink from the top edge: a snapshot scaled about its centre
+     would drift up over the sticky header. */
+  transform-origin: 50% 0;
+}
+
+/* Page swap — the outgoing screen recedes, the incoming one rises. */
 ::view-transition-old(app-page) {
-  animation: vt-out 180ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: vt-page-out 140ms cubic-bezier(0.32, 0, 0.67, 0) both;
 }
 ::view-transition-new(app-page) {
-  animation: vt-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: vt-page-in 300ms cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
 }
 
-/* Lists and the lookahead grid swap in place — crossfade only, no travel. */
+/* Lists and the lookahead grid swap in place — same hand-off, less travel. */
 ::view-transition-old(item-list),
 ::view-transition-old(lookahead) {
-  animation: vt-fade-out 140ms ease-out both;
+  animation: vt-swap-out 110ms cubic-bezier(0.32, 0, 0.67, 0) both;
 }
 ::view-transition-new(item-list),
 ::view-transition-new(lookahead) {
-  animation: vt-fade-in 220ms ease-out both;
+  animation: vt-swap-in 240ms cubic-bezier(0.16, 1, 0.3, 1) 110ms both;
 }
 
-@keyframes vt-out      { to   { opacity: 0; transform: translateY(-4px); } }
-@keyframes vt-in       { from { opacity: 0; transform: translateY(8px); } }
-@keyframes vt-fade-out { to   { opacity: 0; } }
-@keyframes vt-fade-in  { from { opacity: 0; } }
+@keyframes vt-page-out { to   { opacity: 0; transform: scale(0.985); } }
+@keyframes vt-page-in  { from { opacity: 0; transform: translateY(12px) scale(0.994); } }
+@keyframes vt-swap-out { to   { opacity: 0; transform: scale(0.99); } }
+@keyframes vt-swap-in  { from { opacity: 0; transform: translateY(6px); } }
 
 @media (prefers-reduced-motion: reduce) {
-  /* Keep the crossfade, drop the movement. */
-  ::view-transition-old(*),
+  /* Keep the hand-off — it is what says the screen changed — but drop the
+     travel and most of the wait. */
+  ::view-transition-old(*) {
+    animation-name: vt-reduced-out !important;
+    animation-duration: 90ms !important;
+    animation-delay: 0s !important;
+  }
   ::view-transition-new(*) {
-    animation-duration: 1ms;
+    animation-name: vt-reduced-in !important;
+    animation-duration: 110ms !important;
+    animation-delay: 90ms !important;
   }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -331,3 +377,6 @@
     scroll-behavior: auto !important;
   }
 }
+
+@keyframes vt-reduced-out { to   { opacity: 0; } }
+@keyframes vt-reduced-in  { from { opacity: 0; } }

@@ -23,7 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
-import { PanelLeftIcon } from "lucide-react"
+import { MenuIcon, PanelLeftIcon } from "lucide-react"
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state"
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7
@@ -187,7 +187,15 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          className={cn(
+            "w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden",
+            // A nav drawer travels the whole way off-canvas. The sheet's
+            // default 2.5rem nudge suits a panel that fades; on a menu that
+            // covers three quarters of the screen it reads as a stumble.
+            "ease-[cubic-bezier(0.32,0.72,0,1)]",
+            "data-[side=left]:data-starting-style:-translate-x-full",
+            "data-[side=left]:data-ending-style:-translate-x-full"
+          )}
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -271,7 +279,12 @@ function SidebarTrigger({
       }}
       {...props}
     >
-      <PanelLeftIcon />
+      {/* Below `lg` this opens a drawer over the page, so it wears the
+          hamburger every phone user already reads as "menu". On desktop it
+          collapses a rail beside the content, which is what the panel
+          glyph says. */}
+      <MenuIcon className="lg:hidden" />
+      <PanelLeftIcon className="hidden lg:block" />
       <span className="sr-only">Toggle Sidebar</span>
     </Button>
   )
