@@ -219,19 +219,19 @@ export default function DashboardPage({
         <StatTile
           label="On Site" value={counts.onsite}
           sub={`${Math.round((counts.onsite / items.length) * 100)}% delivered`}
-          tone="onsite" active={counts.onsite > 0}
+          tone="onsite"
         />
         <StatTile
           label="On Track" value={counts.ontrack} sub="On schedule"
-          tone="ontrack" active={counts.ontrack > 0}
+          tone="ontrack"
         />
         <StatTile
           label="At Risk" value={counts.atrisk} sub="FAT within 14 days"
-          tone="atrisk" active={counts.atrisk > 0}
+          tone="atrisk"
         />
         <StatTile
           label="Late" value={counts.late} sub="Overdue"
-          tone="late" active={counts.late > 0}
+          tone="late"
         />
       </div>
 

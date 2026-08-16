@@ -12,7 +12,6 @@ import ItemCard from './ItemCard';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
@@ -204,35 +203,33 @@ export default function OverviewPage({
           </p>
         </div>
 
-        {/* Import and Export are one control pair; adding an item is the
-            primary act, so it stands apart from them. */}
-        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto">
-          {/* Two joined buttons need twice the room of the single one beside
-              them, and the word “Excel” only fits once the screen is wide. */}
-          <ButtonGroup className="min-w-0 flex-[2] sm:flex-none">
-            <Button
-              variant="outline" size="lg"
-              className="min-w-0 flex-1 sm:flex-none"
-              onClick={onImport}
-            >
-              <ArrowDownToLine />
-              <span className="truncate">Import<span className="hidden md:inline">&nbsp;Excel</span></span>
-            </Button>
-            <Button
-              variant="outline" size="lg"
-              className="min-w-0 flex-1 sm:flex-none"
-              onClick={onExport}
-              disabled={!total || exporting}
-            >
-              {exporting ? <Spinner /> : <ArrowUpFromLine />}
-              <span className="truncate">
-                {exporting ? 'Preparing…' : <>Export<span className="hidden md:inline">&nbsp;Excel</span></>}
-              </span>
-            </Button>
-          </ButtonGroup>
-          <Button size="lg" className="flex-1 sm:flex-none" onClick={onAddItem}>
+        {/* Three separate buttons with air between them. Joined into one
+            group, Import and Export shared an edge and read as a single
+            cramped control — two words that long need room to be told
+            apart. The word “Excel” only fits once the screen is wide. */}
+        <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:gap-2.5">
+          <Button
+            variant="outline" size="lg"
+            className="min-w-0 flex-1 sm:flex-none"
+            onClick={onImport}
+          >
+            <ArrowDownToLine />
+            <span className="truncate">Import<span className="hidden md:inline">&nbsp;Excel</span></span>
+          </Button>
+          <Button
+            variant="outline" size="lg"
+            className="min-w-0 flex-1 sm:flex-none"
+            onClick={onExport}
+            disabled={!total || exporting}
+          >
+            {exporting ? <Spinner /> : <ArrowUpFromLine />}
+            <span className="truncate">
+              {exporting ? 'Preparing…' : <>Export<span className="hidden md:inline">&nbsp;Excel</span></>}
+            </span>
+          </Button>
+          <Button size="lg" className="min-w-0 flex-1 sm:flex-none" onClick={onAddItem}>
             <Plus />
-            Add item
+            <span className="truncate">Add item</span>
           </Button>
         </div>
       </div>
@@ -254,10 +251,10 @@ export default function OverviewPage({
           className="col-span-2 md:col-span-1"
           label="Total items" value={total} sub={`${overallProg}% overall progress`}
         />
-        <StatTile label="On Site"  value={onsite}  sub="Delivered"           tone="onsite"  active={onsite > 0} />
-        <StatTile label="On Track" value={ontrack} sub="Progressing"         tone="ontrack" active={ontrack > 0} />
-        <StatTile label="At Risk"  value={atrisk}  sub="FAT within 14 days"  tone="atrisk"  active={atrisk > 0} />
-        <StatTile label="Late"     value={late}    sub="Overdue"             tone="late"    active={late > 0} />
+        <StatTile label="On Site"  value={onsite}  sub="Delivered"          tone="onsite" />
+        <StatTile label="On Track" value={ontrack} sub="Progressing"        tone="ontrack" />
+        <StatTile label="At Risk"  value={atrisk}  sub="FAT within 14 days" tone="atrisk" />
+        <StatTile label="Late"     value={late}    sub="Overdue"            tone="late" />
       </div>
 
       {/* ── Toolbar ── */}
@@ -358,7 +355,7 @@ export default function OverviewPage({
               </EmptyHeader>
               <EmptyContent>
                 {total === 0 ? (
-                  <ButtonGroup>
+                  <div className="flex flex-wrap justify-center gap-2.5">
                     <Button variant="outline" onClick={onImport}>
                       <ArrowDownToLine />
                       Import Excel
@@ -367,7 +364,7 @@ export default function OverviewPage({
                       <Plus />
                       Add item
                     </Button>
-                  </ButtonGroup>
+                  </div>
                 ) : (
                   <Button variant="outline" onClick={() => startFilter(onClearFilters)}>
                     <X />

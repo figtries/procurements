@@ -9,7 +9,6 @@ import MilestoneRow from './MilestoneRow';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -134,8 +133,9 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
           </div>
 
           {/* Side by side and full width on a phone, so neither action ends up
-              as a lone stub on its own line. */}
-          <ButtonGroup className="w-full shrink-0 sm:w-auto">
+              as a lone stub on its own line — but with air between them, the
+              way the toolbar on the overview reads. */}
+          <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:gap-2.5">
             <Button
               variant="outline" size="lg"
               className="flex-1 sm:flex-none"
@@ -152,7 +152,7 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
               <Trash2 />
               Delete
             </Button>
-          </ButtonGroup>
+          </div>
         </div>
 
         <div className="grid gap-5 border-t p-4 sm:grid-cols-2 sm:gap-6 sm:p-5">
