@@ -16,10 +16,6 @@ import ProjectsPage from '@/components/projects/ProjectsPage';
 import {
   SidebarInset, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
-import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 
 import {
@@ -41,13 +37,6 @@ import type {
 function buildMilestone(plan: string, fc: string, act: string, note: string): MilestoneEntry {
   return { plan, forecast: fc, actual: act, note };
 }
-
-const PAGE_TITLES: Record<PageName, string> = {
-  dashboard: 'Dashboard',
-  overview: 'Overview',
-  projects: 'Projects',
-  itemDetail: 'Item detail',
-};
 
 /* ─────────────── MAIN PAGE ─────────────── */
 export default function ProcurementApp() {
@@ -397,41 +386,16 @@ export default function ProcurementApp() {
               button as a stray mark. It only earns its place where there are
               two sides to keep apart. */}
           <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
-          <Breadcrumb className="min-w-0">
-            <BreadcrumbList className="flex-nowrap gap-1.5 sm:gap-2">
-              <BreadcrumbItem className="min-w-0">
-                <BreadcrumbLink
-                  className="cursor-pointer truncate"
-                  render={<button type="button" onClick={() => nav('projects')} />}
-                >
-                  {activeProject?.name ?? 'Procurement'}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-
-              {/* The middle crumb is the first thing to go when the screen
-                  cannot hold all three. */}
-              {page === 'itemDetail' && (
-                <>
-                  <BreadcrumbSeparator className="hidden sm:flex" />
-                  <BreadcrumbItem className="hidden shrink-0 sm:inline-flex">
-                    <BreadcrumbLink
-                      className="cursor-pointer"
-                      render={<button type="button" onClick={() => nav('overview')} />}
-                    >
-                      Overview
-                    </BreadcrumbLink>
-                  </BreadcrumbItem>
-                </>
-              )}
-
-              <BreadcrumbSeparator className="flex shrink-0 items-center" />
-              <BreadcrumbItem className="min-w-0">
-                <BreadcrumbPage className="truncate">
-                  {page === 'itemDetail' && detailItem ? detailItem.desc : PAGE_TITLES[page]}
-                </BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+          {/* The project, and nothing else. Every page carries its own title a
+              few lines down, so naming it up here only said the same thing
+              twice on one screen. */}
+          <button
+            type="button"
+            onClick={() => nav('projects')}
+            className="-mx-1 min-w-0 cursor-pointer truncate rounded-md px-1 text-sm font-medium transition-colors outline-none hover:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {activeProject?.name ?? 'Procurement'}
+          </button>
         </header>
 
         <main className="mx-auto w-full max-w-[1120px] px-4 pt-5 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 xl:px-10">
