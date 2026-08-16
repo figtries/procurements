@@ -20,6 +20,10 @@ export const viewport: Viewport = {
   // `cover` lets the layout reach under the notch and home indicator; the
   // panes that need it pad themselves back with env(safe-area-inset-*).
   viewportFit: 'cover',
+  // The on-screen keyboard takes height away from the layout instead of
+  // sliding over it, so a sheet docked to the bottom edge — the project form
+  // is one — rides above the keys rather than hiding behind them.
+  interactiveWidget: 'resizes-content',
   themeColor: '#ffffff',
 };
 

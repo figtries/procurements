@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import {
-  Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,85 +33,103 @@ export default function ProjectForm({
           the short ones can pair off across a row. */}
       {/* No corner X: Cancel is right there, and two ways out of one small
           form is one more than the form needs. */}
-      <DialogContent className="@container gap-0 p-5 sm:max-w-xl" showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle className="text-xl font-semibold tracking-tight">
-            Create a new project
-          </DialogTitle>
-        </DialogHeader>
-
+      {/* Flex column rather than the default grid, and no padding of its own:
+          the title and the buttons stay put while only the fields scroll, so
+          the phone sheet takes whatever height is left instead of a magic
+          number that leaves Create project below the bottom of the screen. */}
+      <DialogContent
+        className="flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-xl"
+        showCloseButton={false}
+      >
         <form
-          className="mt-5 flex max-h-[60svh] flex-col gap-4 overflow-y-auto"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={e => { e.preventDefault(); onSubmit(); }}
         >
-          <div className="grid gap-2">
-            <Label htmlFor="pf-name">Project name</Label>
-            <Input
-              id="pf-name"
-              value={name}
-              onChange={e => onChange('name', e.target.value)}
-              placeholder="e.g. Pulau Gading BCS Phase 1"
-              autoFocus
-            />
-          </div>
+          <DialogHeader className="shrink-0 px-5 pt-5 pb-4">
+            <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">
+              Create a new project
+            </DialogTitle>
+          </DialogHeader>
 
-          {/* Three short fields across, then two — the rows the fields
-              themselves ask for, not an even split down the middle. */}
-          <div className="grid gap-4 @sm:grid-cols-3">
+          {/* The rows answer to the width of this box, not of the window: the
+              same form is a full-bleed sheet on a phone and a 36rem card on a
+              desktop, and only its own measure knows which pairings fit. */}
+          <div className="@container min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 pb-5">
             <div className="grid gap-2">
-              <Label htmlFor="pf-client">Client</Label>
+              <Label htmlFor="pf-name">Project name</Label>
               <Input
-                id="pf-client" value={client}
-                onChange={e => onChange('client', e.target.value)}
-                placeholder="Company name"
+                id="pf-name"
+                value={name}
+                onChange={e => onChange('name', e.target.value)}
+                placeholder="e.g. Pulau Gading BCS Phase 1"
+                autoFocus
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="pf-location">Location</Label>
-              <Input
-                id="pf-location" value={location}
-                onChange={e => onChange('location', e.target.value)}
-                placeholder="City / region"
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="pf-pic">PIC</Label>
-              <Input
-                id="pf-pic" value={pic}
-                onChange={e => onChange('pic', e.target.value)}
-                placeholder="Full name"
-              />
-            </div>
-          </div>
 
-          <div className="grid gap-4 @sm:grid-cols-2">
-            <div className="grid gap-2">
-              <Label htmlFor="pf-contract">Contract no.</Label>
-              <Input
-                id="pf-contract" value={contractNo}
-                onChange={e => onChange('contractNo', e.target.value)}
-                placeholder="CTR-2026-XXXX"
-              />
+            {/* Three short fields across, then two — the rows the fields
+                themselves ask for, not an even split down the middle. A
+                company, a city and a person keep the full measure on a phone;
+                cut into thirds there they would each hold about four letters. */}
+            <div className="grid gap-4 @sm:grid-cols-3">
+              <div className="grid gap-2">
+                <Label htmlFor="pf-client">Client</Label>
+                <Input
+                  id="pf-client" value={client}
+                  onChange={e => onChange('client', e.target.value)}
+                  placeholder="Company name"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pf-location">Location</Label>
+                <Input
+                  id="pf-location" value={location}
+                  onChange={e => onChange('location', e.target.value)}
+                  placeholder="City / region"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pf-pic">PIC</Label>
+                <Input
+                  id="pf-pic" value={pic}
+                  onChange={e => onChange('pic', e.target.value)}
+                  placeholder="Full name"
+                />
+              </div>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="pf-handover">Handover target</Label>
-              <Input
-                id="pf-handover" type="date" value={handover}
-                onChange={e => onChange('handover', e.target.value)}
-              />
+
+            {/* A contract number and a date are short enough to sit side by
+                side even on a phone, which is one row of scrolling saved. */}
+            <div className="grid gap-4 @xs:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="pf-contract">Contract no.</Label>
+                <Input
+                  id="pf-contract" value={contractNo}
+                  onChange={e => onChange('contractNo', e.target.value)}
+                  placeholder="CTR-2026-XXXX"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pf-handover">Handover target</Label>
+                <Input
+                  id="pf-handover" type="date" value={handover}
+                  onChange={e => onChange('handover', e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
           {/* One full-width bar cut in half, so the two answers to this form
-              carry the same weight and reach the same edges as the fields. */}
-          <div className="mt-2 flex gap-3">
+              carry the same weight and reach the same edges as the fields.
+              It sits below the scroll rather than inside it: the way out of a
+              form should not be something you have to go looking for. */}
+          <DialogFooter className="m-0 shrink-0 flex-row gap-3 rounded-none px-5 py-4">
             <DialogClose render={<Button variant="outline" size="lg" className="flex-1" />}>
               Cancel
             </DialogClose>
             <Button type="submit" size="lg" className="flex-1">
               Create project
             </Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
