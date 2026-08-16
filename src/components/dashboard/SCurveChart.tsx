@@ -2,6 +2,8 @@
 
 import type { SCurvePoint } from '@/lib/procurement';
 import { useMediaQuery } from '@/hooks/use-mobile';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 /**
  * Plot geometry inside the viewBox. The wide box is drawn for a card that has
@@ -10,8 +12,8 @@ import { useMediaQuery } from '@/hooks/use-mobile';
  * narrower box is drawn instead, which scales *up* and keeps the type legible.
  */
 const GEOMETRY = {
-  full:    { w: 640, h: 216, X0: 44, X1: 620, Y0: 190, Y1: 16, tick: 207, labels: 12, minW: 'min-w-[520px]', gap: 7 },
-  compact: { w: 320, h: 200, X0: 26, X1: 312, Y0: 170, Y1: 12, tick: 191, labels: 5,  minW: '',              gap: 5 },
+  full:    { w: 640, h: 216, X0: 38, X1: 638, Y0: 190, Y1: 18, tick: 207, labels: 12, minW: 'min-w-[520px]', gap: 7 },
+  compact: { w: 320, h: 200, X0: 36, X1: 318, Y0: 170, Y1: 16, tick: 191, labels: 5,  minW: '',              gap: 5 },
 } as const;
 
 interface SCurveChartProps {
@@ -56,13 +58,36 @@ export default function SCurveChart({ points }: SCurveChartProps) {
     ? `${actPath} L${x(lastActualIdx).toFixed(1)},${g.Y0} L${g.X0},${g.Y0} Z`
     : '';
 
-  // Label every month when there is room, otherwise thin them out.
+  // Label every month when there is room, otherwise thin them out. The final
+  // month is pinned to the right edge, so a label that would sit under it is
+  // dropped rather than printed on top of it.
   const labelEvery = points.length > g.labels + 2 ? Math.ceil(points.length / g.labels) : 1;
+  const lastIdx = points.length - 1;
+  const tickIdx = points
+    .map((_, i) => i)
+    .filter(i => i % labelEvery === 0 || i === lastIdx)
+    .filter(i => i === lastIdx || x(i) < g.X1 - 56);
+
+  // Near the right edge the read-out has no room to its right, so it flips.
+  const labelLeft = lastActualIdx >= 0 && x(lastActualIdx) > (g.X0 + g.X1) / 2;
+
+  // The two pills are placed over the SVG in viewBox fractions, which hold as
+  // the chart scales because the SVG fills its wrapper exactly. When plan and
+  // actual nearly meet, they part company so the pills never sit on top of
+  // each other.
+  const pctX = (v: number) => `${(v / g.w) * 100}%`;
+  const pctY = (v: number) => `${(v / g.h) * 100}%`;
+  const crowded =
+    lastActual && lastActual.actual !== null
+      ? Math.abs(y(lastActual.plan) - y(lastActual.actual)) < 26
+      : false;
+
   return (
     <div className="-mx-1 overflow-x-auto px-1">
+      <div className={cn('relative', g.minW)}>
       <svg
         viewBox={`0 0 ${g.w} ${g.h}`}
-        className={`block h-auto w-full ${g.minW}`}
+        className="block h-auto w-full"
         role="img"
         aria-label={
           lastActual && lastActual.actual !== null
@@ -84,10 +109,10 @@ export default function SCurveChart({ points }: SCurveChartProps) {
               stroke="var(--border)" strokeWidth={1}
             />
             <text
-              x={g.X0 - 6} y={y(pct) + 3.5} textAnchor="end"
-              className="fill-muted-foreground text-[10px] font-semibold tabular"
+              x={g.X0 - 8} y={y(pct) + 3.5} textAnchor="end"
+              className="fill-muted-foreground text-[10px] font-medium tabular"
             >
-              {pct}
+              {pct}%
             </text>
           </g>
         ))}
@@ -133,17 +158,73 @@ export default function SCurveChart({ points }: SCurveChartProps) {
           </>
         )}
 
-        {points.map((p, i) =>
-          i % labelEvery === 0 ? (
-            <text
-              key={p.date} x={x(i)} y={g.tick} textAnchor="middle"
-              className="fill-muted-foreground text-[10px] font-semibold"
-            >
-              {p.label}
-            </text>
-          ) : null,
-        )}
+        {/* The final month sits on the right edge, so it anchors to its own
+            side instead of centring half a label off the viewBox. */}
+        {tickIdx.map(i => (
+          <text
+            key={points[i].date}
+            x={i === lastIdx ? g.X1 : x(i)}
+            y={g.tick}
+            textAnchor={i === lastIdx ? 'end' : 'middle'}
+            className="fill-muted-foreground text-[10px] font-medium"
+          >
+            {points[i].label}
+          </text>
+        ))}
       </svg>
+
+      {/* The read-out at the latest reported month, as the same tinted pill
+          the rest of the app uses for status. The tint carries which line the
+          number belongs to, so the pill holds the figure and nothing else. */}
+      {lastActual && lastActual.actual !== null && (
+        <>
+          <Readout
+            tone="late" value={lastActual.plan}
+            left={pctX(x(lastActualIdx))}
+            top={pctY(y(lastActual.plan) - (crowded ? 13 : 0))}
+            side={labelLeft ? 'left' : 'right'}
+          />
+          <Readout
+            tone="info" value={lastActual.actual}
+            left={pctX(x(lastActualIdx))}
+            top={pctY(y(lastActual.actual) + (crowded ? 13 : 0))}
+            side={labelLeft ? 'left' : 'right'}
+          />
+        </>
+      )}
+      </div>
     </div>
+  );
+}
+
+const TONE = {
+  late: 'bg-late-bg text-late-fg',
+  info: 'bg-info-bg text-info-fg',
+} as const;
+
+interface ReadoutProps {
+  tone: keyof typeof TONE;
+  value: number;
+  left: string;
+  top: string;
+  side: 'left' | 'right';
+}
+
+/** One pill pinned to a point on the curve, centred on it and shifted clear. */
+function Readout({ tone, value, left, top, side }: ReadoutProps) {
+  return (
+    <Badge
+      variant="secondary"
+      className={cn(
+        'pointer-events-none absolute gap-1 border-transparent px-2 font-medium shadow-xs',
+        TONE[tone],
+        side === 'left'
+          ? '-translate-x-[calc(100%+10px)] -translate-y-1/2'
+          : 'translate-x-[10px] -translate-y-1/2',
+      )}
+      style={{ left, top }}
+    >
+      <span className="font-semibold tabular">{Math.round(value)}%</span>
+    </Badge>
   );
 }

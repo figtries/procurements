@@ -192,15 +192,10 @@ export default function OverviewPage({
     <div className="space-y-5 sm:space-y-6">
       {/* ── Page header ── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 space-y-1">
+        <div className="min-w-0">
           <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
-            Procurement Overview
+            Overview
           </h1>
-          <p className="text-sm text-muted-foreground">
-            {total === 0
-              ? 'Nothing tracked on this project yet.'
-              : `${total} item${total === 1 ? '' : 's'} · ${uniqueDiscs.length} discipline${uniqueDiscs.length === 1 ? '' : 's'} · ${uniqueVendors.length} vendor${uniqueVendors.length === 1 ? '' : 's'}`}
-          </p>
         </div>
 
         {/* Three separate buttons with air between them. Joined into one
