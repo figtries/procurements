@@ -88,7 +88,7 @@ export default function ImportModal({
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
       <DialogContent className="flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-5xl">
-        <DialogHeader className="shrink-0 border-b p-4">
+        <DialogHeader className="shrink-0 p-4 pb-3">
           <DialogTitle>Import from Excel</DialogTitle>
           <DialogDescription>
             Every sheet is read, header rows are detected, and disciplines are split out of

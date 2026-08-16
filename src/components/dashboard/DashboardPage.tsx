@@ -1,6 +1,6 @@
 'use client';
 
-import { ViewTransition, useMemo, useState, useTransition } from 'react';
+import { ViewTransition, useEffect, useMemo, useState, useTransition } from 'react';
 import {
   ArrowDownToLine, CalendarClock, CheckCircle2, FileWarning,
   PackageSearch, Receipt, Ship, TriangleAlert,
@@ -9,6 +9,7 @@ import type { Anomaly, ProcurementItem, Project } from '@/types';
 import {
   buildLookahead, buildSCurve, computeDeviation, daysDiff, detectAnomalies,
   disciplineBreakdown, fmtDate, milestoneStats, today, vendorStats,
+  type DisciplineBreakdown,
 } from '@/lib/procurement';
 import SCurveChart from './SCurveChart';
 import StatTile from './StatTile';
@@ -20,6 +21,10 @@ import { Button } from '@/components/ui/button';
 import {
   Card, CardAction, CardContent, CardHeader, CardTitle,
 } from '@/components/ui/card';
+import {
+  Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious,
+  type CarouselApi,
+} from '@/components/ui/carousel';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -276,48 +281,7 @@ export default function DashboardPage({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Breakdown by discipline</CardTitle>
-          </CardHeader>
-          {/* Same two-line rhythm as the milestone card beside it: a labelled
-              row, then its bar — which also lets the rows fill the card. */}
-          <CardContent className="flex h-full flex-col">
-            <div className="flex flex-1 flex-col justify-evenly gap-3">
-              {disciplines.map(d => {
-                const w = (n: number) => (d.total ? (n / d.total) * 100 : 0);
-                return (
-                  <div key={d.discipline} className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-3">
-                      <DisciplineBadge discipline={d.discipline} className="min-w-0 truncate" />
-                      <span className="shrink-0 text-sm font-semibold tabular">
-                        {d.total}
-                        <span className="font-normal text-muted-foreground">
-                          {' '}item{d.total === 1 ? '' : 's'}
-                        </span>
-                      </span>
-                    </div>
-                    <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
-                      <div className="bg-onsite"   style={{ width: `${w(d.counts.onsite)}%` }} />
-                      <div className="bg-ontrack"  style={{ width: `${w(d.counts.ontrack)}%` }} />
-                      <div className="bg-atrisk"   style={{ width: `${w(d.counts.atrisk)}%` }} />
-                      <div className="bg-late"     style={{ width: `${w(d.counts.late)}%` }} />
-                      <div className="bg-planning" style={{ width: `${w(d.counts.planning)}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
-              <Key swatch="bg-onsite" label="On Site" />
-              <Key swatch="bg-ontrack" label="On Track" />
-              <Key swatch="bg-atrisk" label="At Risk" />
-              <Key swatch="bg-late" label="Late" />
-              <Key swatch="bg-planning" label="Planning" />
-            </div>
-          </CardContent>
-        </Card>
+        <DisciplineCard disciplines={disciplines} />
       </div>
 
       {/* ── Lookahead ── */}
@@ -559,6 +523,122 @@ export default function DashboardPage({
 }
 
 /* ─────────────── Sub-components ─────────────── */
+
+/** Four rows leave the card the same height as the milestone card beside it;
+ *  a project with more disciplines than that pages through them. */
+const DISC_PAGE_SIZE = 4;
+
+function DisciplineCard({ disciplines }: { disciplines: DisciplineBreakdown[] }) {
+  const [api, setApi] = useState<CarouselApi>();
+  const [page, setPage] = useState(0);
+
+  const pages = useMemo(() => {
+    const out: DisciplineBreakdown[][] = [];
+    for (let i = 0; i < disciplines.length; i += DISC_PAGE_SIZE) {
+      out.push(disciplines.slice(i, i + DISC_PAGE_SIZE));
+    }
+    return out;
+  }, [disciplines]);
+
+  useEffect(() => {
+    if (!api) return;
+    const sync = () => setPage(api.selectedScrollSnap());
+    sync();
+    api.on('select', sync);
+    api.on('reInit', sync);
+    return () => {
+      api.off('select', sync);
+      api.off('reInit', sync);
+    };
+  }, [api]);
+
+  const rows = (page: DisciplineBreakdown[]) => (
+    <div className="space-y-3">
+      {page.map(d => {
+        const w = (n: number) => (d.total ? (n / d.total) * 100 : 0);
+        return (
+          <div key={d.discipline} className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+              <DisciplineBadge discipline={d.discipline} className="min-w-0 truncate" />
+              <span className="shrink-0 text-sm font-semibold tabular">
+                {d.total}
+                <span className="font-normal text-muted-foreground">
+                  {' '}item{d.total === 1 ? '' : 's'}
+                </span>
+              </span>
+            </div>
+            <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
+              <div className="bg-onsite"   style={{ width: `${w(d.counts.onsite)}%` }} />
+              <div className="bg-ontrack"  style={{ width: `${w(d.counts.ontrack)}%` }} />
+              <div className="bg-atrisk"   style={{ width: `${w(d.counts.atrisk)}%` }} />
+              <div className="bg-late"     style={{ width: `${w(d.counts.late)}%` }} />
+              <div className="bg-planning" style={{ width: `${w(d.counts.planning)}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const legend = (
+    <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] text-muted-foreground">
+      <Key swatch="bg-onsite" label="On Site" />
+      <Key swatch="bg-ontrack" label="On Track" />
+      <Key swatch="bg-atrisk" label="At Risk" />
+      <Key swatch="bg-late" label="Late" />
+      <Key swatch="bg-planning" label="Planning" />
+    </div>
+  );
+
+  /* Same two-line rhythm as the milestone card beside it: a labelled row, then
+     its bar. The rows sit centred in whatever height the taller card sets,
+     rather than stretching apart from one another. */
+  if (pages.length <= 1) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Breakdown by discipline</CardTitle>
+        </CardHeader>
+        <CardContent className="flex h-full flex-col">
+          <div className="flex flex-1 flex-col justify-center">{rows(disciplines)}</div>
+          {legend}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      {/* The carousel takes no box of its own — `contents` keeps the heading and
+          the pages as direct children of the card, so the arrows can sit in the
+          heading and still reach the carousel's context. */}
+      <Carousel className="contents" opts={{ align: 'start' }} setApi={setApi}>
+        <CardHeader>
+          <CardTitle>Breakdown by discipline</CardTitle>
+          <CardAction className="flex items-center gap-1">
+            <span className="text-xs text-muted-foreground tabular">
+              {page + 1}/{pages.length}
+            </span>
+            <CarouselPrevious className="static size-7" />
+            <CarouselNext className="static size-7" />
+          </CardAction>
+        </CardHeader>
+        <CardContent className="flex h-full flex-col">
+          <div className="flex flex-1 flex-col justify-center">
+            <CarouselContent className="ml-0">
+              {pages.map((pageRows, p) => (
+                <CarouselItem key={p} className="pl-0">
+                  {rows(pageRows)}
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </div>
+          {legend}
+        </CardContent>
+      </Carousel>
+    </Card>
+  );
+}
 
 function Bar({ label, value, className }: { label: string; value: number; className: string }) {
   return (

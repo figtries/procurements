@@ -41,15 +41,23 @@ function SelectTrigger({
       data-slot="select-trigger"
       data-size={size}
       className={cn(
-        "flex w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "group/select-trigger flex w-fit items-center justify-between gap-1.5 rounded-lg border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap transition-colors outline-none select-none",
+        // While the list is open the trigger gives up the corner radius on the
+        // side the list is on, so the two halves meet flat and become one
+        // shape. Base UI reports that side on the trigger itself, which is
+        // what lets this stay correct when the popup flips above.
+        "data-[popup-open]:data-[popup-side=bottom]:rounded-b-none data-[popup-open]:data-[popup-side=top]:rounded-t-none",
+        "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-8 data-[size=sm]:h-7 data-[size=sm]:rounded-[min(var(--radius-md),10px)] *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         className
       )}
       {...props}
     >
       {children}
+      {/* The chevron turns over as the list unfolds — the one part of the
+          trigger that has to acknowledge the state changed. */}
       <SelectPrimitive.Icon
         render={
-          <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground" />
+          <ChevronDownIcon className="pointer-events-none size-4 text-muted-foreground transition-transform duration-200 group-data-[popup-open]/select-trigger:rotate-180 motion-reduce:transition-none" />
         }
       />
     </SelectPrimitive.Trigger>
@@ -60,10 +68,17 @@ function SelectContent({
   className,
   children,
   side = "bottom",
-  sideOffset = 4,
-  align = "center",
+  // Overlap the trigger's border by exactly one pixel so the two outlines land
+  // on top of each other and read as a single continuous edge, not a hairline
+  // gap between two separate boxes.
+  sideOffset = -1,
+  align = "start",
   alignOffset = 0,
-  alignItemWithTrigger = true,
+  // Base UI's default overlays the popup on top of the trigger, native-select
+  // style: the list covers the control, never lines up with the row it belongs
+  // to, and the open animation is suppressed. Anchoring it below the trigger
+  // and flush to its start edge is what makes it read as a dropdown.
+  alignItemWithTrigger = false,
   ...props
 }: SelectPrimitive.Popup.Props &
   Pick<
@@ -83,11 +98,28 @@ function SelectContent({
         <SelectPrimitive.Popup
           data-slot="select-content"
           data-align-trigger={alignItemWithTrigger}
-          className={cn("relative isolate z-50 max-h-(--available-height) min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-lg bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10 duration-100 data-[align-trigger=true]:animate-none data-[side=bottom]:slide-in-from-top-2 data-[side=inline-end]:slide-in-from-left-2 data-[side=inline-start]:slide-in-from-right-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95", className )}
+          className={cn(
+            "relative isolate z-50 max-h-(--available-height) min-w-(--anchor-width) max-w-[min(28rem,var(--available-width))] overflow-x-hidden overflow-y-auto overscroll-contain rounded-lg border border-input bg-popover text-popover-foreground shadow-lg",
+            // Square off the edge that meets the trigger and keep the same
+            // border the trigger wears, so control and list share one outline
+            // and one corner radius — a single object, not two stacked ones.
+            "data-[side=bottom]:rounded-t-none data-[side=top]:rounded-b-none",
+            // The wipe has to start from whichever edge is shared, so the
+            // direction follows the side Base UI actually placed the popup on.
+            "data-[side=bottom]:data-open:animate-select-unfold-down data-[side=top]:data-open:animate-select-unfold-up",
+            "data-[side=bottom]:data-closed:animate-select-fold-down data-[side=top]:data-closed:animate-select-fold-up",
+            "motion-reduce:animate-none data-[align-trigger=true]:animate-none",
+            className,
+          )}
           {...props}
         >
           <SelectScrollUpButton />
-          <SelectPrimitive.List>{children}</SelectPrimitive.List>
+          {/* Items are inset from the rounded edge. SelectGroup carries its own
+              padding for grouped lists; the flat lists this app uses would
+              otherwise run their highlight straight into the corner radius. */}
+          <SelectPrimitive.List className="p-1 has-[[data-slot=select-group]]:p-0">
+            {children}
+          </SelectPrimitive.List>
           <SelectScrollDownButton />
         </SelectPrimitive.Popup>
       </SelectPrimitive.Positioner>

@@ -6,20 +6,17 @@ import {
   TriangleAlert, X,
 } from 'lucide-react';
 import type { GroupBy, ItemStatus, ProcurementItem } from '@/types';
-import { STATUS_LABELS, computeOverallProgress, getDisciplineStyle } from '@/lib/procurement';
+import { STATUS_LABELS, computeOverallProgress } from '@/lib/procurement';
 import StatTile from './StatTile';
-import ItemCard from './ItemCard';
+import GroupCard from './GroupCard';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
 } from '@/components/ui/empty';
 import {
   InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput,
 } from '@/components/ui/input-group';
-import { ItemGroup } from '@/components/ui/item';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -50,16 +47,6 @@ interface OverviewPageProps {
   exporting: boolean;
   onAddItem: () => void;
   onOpenDetail: (item: ProcurementItem) => void;
-}
-
-/**
- * A group heading gets a dot rather than a filled chip: six saturated pills
- * stacked down the page fight the status colours the list actually runs on.
- */
-function groupAccent(groupBy: GroupBy, key: string): string {
-  if (groupBy === 'discipline') return getDisciplineStyle(key).color;
-  if (groupBy === 'status') return `var(--st-${key})`;
-  return 'var(--muted-foreground)';
 }
 
 /**
@@ -277,35 +264,38 @@ export default function OverviewPage({
           )}
         </InputGroup>
 
-        {/* Two selects to a row on a phone, the long vendor list on its own,
-            then a single flowing row from sm up. */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* A two-column grid on a phone, so the short filters share a row on an
+            exact half rather than a hand-computed width, and the long vendor
+            list takes the row below. From sm up the same children flow as one
+            row, where every control stands 8 units tall and therefore lines up
+            with the group-by tabs at the far end. */}
+        <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
           <FilterSelect
             items={statusItems}
             value={filterStatus}
             placeholder="All statuses"
-            className="w-[calc(50%-0.25rem)] sm:w-[10.5rem]"
+            className="w-full sm:w-[10.5rem]"
             onChange={v => startFilter(() => onFilterStatus(v))}
           />
           <FilterSelect
             items={toItems(uniqueDiscs, 'All disciplines')}
             value={filterDisc}
             placeholder="All disciplines"
-            className="w-[calc(50%-0.25rem)] sm:w-[11rem]"
+            className="w-full sm:w-[11rem]"
             onChange={v => startFilter(() => onFilterDisc(v))}
           />
           <FilterSelect
             items={toItems(uniqueVendors, 'All vendors')}
             value={filterVendor}
             placeholder="All vendors"
-            className="w-full sm:w-[13rem]"
+            className="col-span-2 w-full sm:w-[13rem]"
             onChange={v => startFilter(() => onFilterVendor(v))}
           />
 
           {hasFilters && (
             <Button
               variant="ghost" size="sm"
-              className="text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
+              className="col-span-2 justify-self-start text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
               onClick={() => startFilter(onClearFilters)}
             >
               <X />
@@ -313,7 +303,7 @@ export default function OverviewPage({
             </Button>
           )}
 
-          <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:ml-auto">
             <span className="hidden text-xs font-medium text-muted-foreground sm:inline">
               Group by
             </span>
@@ -371,32 +361,12 @@ export default function OverviewPage({
           ) : (
             <div className="space-y-3 sm:space-y-4">
               {grouped.map(group => (
-                <Card key={group.key} className="gap-0 py-0">
-                  <CardHeader className="flex flex-row items-center gap-2.5 py-3">
-                    <span
-                      className="size-2 shrink-0 rounded-full"
-                      style={{ background: groupAccent(groupBy, group.key) }}
-                    />
-                    {/* Vendor names run long — the heading truncates rather
-                        than pushing its own count off the screen. */}
-                    <CardTitle className="min-w-0 truncate">{group.label}</CardTitle>
-                    <Badge variant="secondary" className="ml-auto shrink-0 tabular">
-                      {group.items.length}
-                      <span className="sr-only"> item{group.items.length === 1 ? '' : 's'}</span>
-                    </Badge>
-                  </CardHeader>
-                  <ItemGroup className="gap-0 border-t">
-                    {group.items.map((item, i) => (
-                      <ItemCard
-                        key={item.id}
-                        item={item}
-                        index={i}
-                        groupBy={groupBy}
-                        onClick={() => onOpenDetail(item)}
-                      />
-                    ))}
-                  </ItemGroup>
-                </Card>
+                <GroupCard
+                  key={group.key}
+                  group={group}
+                  groupBy={groupBy}
+                  onOpenDetail={onOpenDetail}
+                />
               ))}
             </div>
           )}

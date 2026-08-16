@@ -13,6 +13,7 @@ import DashboardPage from '@/components/dashboard/DashboardPage';
 import OverviewPage from '@/components/dashboard/OverviewPage';
 import ItemDetail from '@/components/dashboard/ItemDetail';
 import ProjectsPage from '@/components/projects/ProjectsPage';
+import ProjectCommand from '@/components/ProjectCommand';
 import {
   SidebarInset, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
@@ -22,6 +23,7 @@ import {
   loadActiveProject,
   loadItems,
   loadProjects,
+  reconcileSeed,
   saveActiveProject,
   saveItems,
   saveProjects,
@@ -55,10 +57,9 @@ export default function ProcurementApp() {
 
   const [items, setItems] = useState<ProcurementItem[]>(() => {
     if (typeof window === 'undefined') return [];
-    const stored = loadItems();
-    if (stored.length > 0) return stored;
-    saveItems(DUMMY_ITEMS);
-    return DUMMY_ITEMS;
+    // Seeds on a fresh install and refreshes a stale demo, both through the
+    // same call — items typed into this browser survive either way.
+    return reconcileSeed(loadItems(), DUMMY_ITEMS);
   });
 
   const [activeProjectId, setActiveProjectId] = useState<string | null>(() => {
@@ -97,6 +98,10 @@ export default function ProcurementApp() {
   const [pfForm, setPfForm] = useState({
     name: '', client: '', location: '', pic: '', contractNo: '', handover: '',
   });
+  const [pfOpen, setPfOpen] = useState(false);
+
+  /* ── Project quick-switch palette (⌘K) ── */
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   const [isMounted, setIsMounted] = useState(false);
 
@@ -155,6 +160,7 @@ export default function ProcurementApp() {
     setActiveProjectId(proj.id);
     saveActiveProject(proj.id);
     setPfForm({ name: '', client: '', location: '', pic: '', contractNo: '', handover: '' });
+    setPfOpen(false);
     toast.success(`Project “${proj.name}” created.`);
   }
 
@@ -379,7 +385,10 @@ export default function ProcurementApp() {
       <AppSidebar page={page} attention={attention} onNavigate={nav} />
 
       <SidebarInset>
-        <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:px-4">
+        {/* The bar scrolls away with the page rather than riding along the top.
+            Nothing ever passes underneath it, so it needs neither a rule, a
+            translucent background, nor the blur those were there to support. */}
+        <header className="flex h-14 shrink-0 items-center gap-2 px-3 sm:px-4">
           <SidebarTrigger className="-ml-1" />
           {/* The project, and nothing else. Every page carries its own title a
               few lines down, so naming it up here only said the same thing
@@ -417,9 +426,12 @@ export default function ProcurementApp() {
                   activeProject={activeProject}
                   activeProjectId={activeProjectId}
                   form={pfForm}
+                  formOpen={pfOpen}
+                  onFormOpenChange={setPfOpen}
                   onFormChange={(field, value) => setPfForm(f => ({ ...f, [field]: value }))}
                   onCreateProject={handleCreateProject}
                   onSelectProject={handleSelectProject}
+                  onOpenProject={id => { handleSelectProject(id); nav('overview'); }}
                   onDeleteProject={confirmDeleteProject}
                   onGoOverview={() => nav('overview')}
                   onDeleteActiveProject={() => activeProject && confirmDeleteProject(activeProject)}
@@ -468,6 +480,18 @@ export default function ProcurementApp() {
           </ViewTransition>
         </main>
       </SidebarInset>
+
+      {/* Lives outside the page switch: the shortcut works from any screen. */}
+      <ProjectCommand
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        projects={projects}
+        items={items}
+        activeProjectId={activeProjectId}
+        onSelectProject={handleSelectProject}
+        onNavigate={nav}
+        onCreateProject={() => { nav('projects'); setPfOpen(true); }}
+      />
 
       <ImportModal
         open={importOpen}

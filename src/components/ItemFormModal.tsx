@@ -9,7 +9,9 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
 /* ── Types ── */
@@ -67,17 +69,33 @@ interface ItemFormModalProps {
   onSave: (form: ItemFormState) => void;
 }
 
+/** Base UI wants the option list up front so it can size the popup and read
+ *  back a label for the trigger. */
+const DISCIPLINE_OPTIONS = DISCIPLINES.map(d => ({ value: d, label: d }));
+
 const MILESTONES = [
   { label: 'FAT — Factory Acceptance Test', plan: 'fatPlan', fc: 'fatFc', act: 'fatAct', note: 'fatNote', placeholder: 'FAT note (optional)' },
   { label: 'RTS — Ready To Ship',           plan: 'rtsPlan', fc: 'rtsFc', act: 'rtsAct', note: 'rtsNote', placeholder: 'RTS note (optional)' },
   { label: 'MOS — Material On Site',        plan: 'mosPlan', fc: 'mosFc', act: 'mosAct', note: 'mosNote', placeholder: 'MOS note (optional)' },
 ] as const;
 
+/** Sections are told apart by breathing room and a quiet heading, not by rules
+ *  drawn across the form. `first:mt-0` keeps the top of the body tight. */
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+    <p className="mt-8 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground first:mt-0">
       {children}
     </p>
+  );
+}
+
+/** The dot an option wears on the board, so the picker previews the row. */
+function DisciplineDot({ name }: { name: string }) {
+  return (
+    <span
+      className="size-1.5 shrink-0 rounded-full"
+      style={{ background: getDisciplineStyle(name).color }}
+    />
   );
 }
 
@@ -130,7 +148,7 @@ export default function ItemFormModal({
           height is left after the header and footer instead of being told a
           magic number that only holds at one viewport size. */}
       <DialogContent className="flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-2xl">
-        <DialogHeader className="shrink-0 border-b p-4">
+        <DialogHeader className="shrink-0 p-4 pb-3">
           <DialogTitle>
             {editingItem ? 'Edit Procurement Item' : 'Add Procurement Item'}
           </DialogTitle>
@@ -153,35 +171,35 @@ export default function ItemFormModal({
             {errors.desc && <p className="text-xs text-destructive">{errors.desc}</p>}
           </div>
 
-          <div className="grid gap-2">
-            <Label>Discipline <span className="text-destructive">*</span></Label>
-            {/* Each option carries the colour it will wear on the board, so
-                picking one is not a guess about how the row will read. */}
-            <div className="flex flex-wrap gap-2">
-              {DISCIPLINES.map(d => {
-                const selected = form.discipline === d;
-                const style = getDisciplineStyle(d);
-                return (
-                  <Button
-                    key={d}
-                    type="button"
-                    size="sm"
-                    variant={selected ? 'default' : 'outline'}
-                    onClick={() => setForm(f => ({ ...f, discipline: d }))}
-                  >
-                    <span
-                      className="size-1.5 rounded-full"
-                      style={{ background: selected ? style.bg : style.color }}
-                    />
-                    {d}
-                  </Button>
-                );
-              })}
-            </div>
-            {errors.discipline && <p className="text-xs text-destructive">{errors.discipline}</p>}
-          </div>
-
           <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2 sm:col-span-2">
+              <Label htmlFor="if-discipline">Discipline <span className="text-destructive">*</span></Label>
+              <Select
+                items={DISCIPLINE_OPTIONS}
+                value={form.discipline || null}
+                onValueChange={v =>
+                  setForm(f => ({ ...f, discipline: (v as string | null) ?? '' }))
+                }
+              >
+                <SelectTrigger
+                  id="if-discipline"
+                  className="w-full"
+                  aria-invalid={!!errors.discipline}
+                >
+                  {form.discipline && <DisciplineDot name={form.discipline} />}
+                  <SelectValue placeholder="Select discipline" />
+                </SelectTrigger>
+                <SelectContent>
+                  {DISCIPLINES.map(d => (
+                    <SelectItem key={d} value={d}>
+                      <DisciplineDot name={d} />
+                      {d}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.discipline && <p className="text-xs text-destructive">{errors.discipline}</p>}
+            </div>
             <div className="grid gap-2">
               <Label htmlFor="if-qty">Quantity <span className="text-destructive">*</span></Label>
               <Input
@@ -195,8 +213,6 @@ export default function ItemFormModal({
               <Input id="if-unit" value={form.unit} onChange={set('unit')} placeholder="Ea / Lot / Set" />
             </div>
           </div>
-
-          <Separator />
 
           {/* ── Vendor ── */}
           <SectionLabel>Vendor</SectionLabel>
@@ -220,8 +236,6 @@ export default function ItemFormModal({
             <Label htmlFor="if-delivery">Delivery term</Label>
             <Input id="if-delivery" value={form.delivery} onChange={set('delivery')} placeholder="e.g. DDP SKN" />
           </div>
-
-          <Separator />
 
           {/* ── PO & dokumen ── */}
           <SectionLabel>PO &amp; documents</SectionLabel>
@@ -282,13 +296,11 @@ export default function ItemFormModal({
             />
           </div>
 
-          <Separator />
-
           {/* ── Milestones ── */}
           <SectionLabel>Milestone Schedule</SectionLabel>
 
           {MILESTONES.map(ms => (
-            <div key={ms.label} className="rounded-xl border p-3">
+            <div key={ms.label} className="rounded-xl bg-muted/40 p-3">
               <p className="mb-3 text-sm font-medium">{ms.label}</p>
               <div className="grid gap-3 sm:grid-cols-3">
                 {([

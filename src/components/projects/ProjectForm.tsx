@@ -1,9 +1,13 @@
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog, DialogClose, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 interface ProjectFormProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   name: string;
   client: string;
   location: string;
@@ -14,22 +18,30 @@ interface ProjectFormProps {
   onSubmit: () => void;
 }
 
+/**
+ * Creating a project is a once-in-a-while act, so it no longer holds a
+ * permanent half of the page — it lives behind the header button and comes
+ * forward only when asked for.
+ */
 export default function ProjectForm({
-  name, client, location, pic, contractNo, handover, onChange, onSubmit,
+  open, onOpenChange, name, client, location, pic, contractNo, handover,
+  onChange, onSubmit,
 }: ProjectFormProps) {
   return (
-    // The field rows answer to the card's own width, not the viewport: this
-    // card is full-bleed on a phone but a side column on a wide desktop, and
-    // viewport breakpoints cannot tell those two apart.
-    <Card className="@container">
-      <CardContent className="flex flex-col">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Procurement &amp; Vendor
-        </p>
-        <h2 className="mt-2 text-xl font-semibold tracking-tight">Create a new project</h2>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {/* Wider than the default dialog: six fields read as a form only when
+          the short ones can pair off across a row. */}
+      {/* No corner X: Cancel is right there, and two ways out of one small
+          form is one more than the form needs. */}
+      <DialogContent className="@container gap-0 p-5 sm:max-w-xl" showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle className="text-xl font-semibold tracking-tight">
+            Create a new project
+          </DialogTitle>
+        </DialogHeader>
 
         <form
-          className="mt-6 flex flex-col gap-4"
+          className="mt-5 flex max-h-[60svh] flex-col gap-4 overflow-y-auto"
           onSubmit={e => { e.preventDefault(); onSubmit(); }}
         >
           <div className="grid gap-2">
@@ -39,10 +51,13 @@ export default function ProjectForm({
               value={name}
               onChange={e => onChange('name', e.target.value)}
               placeholder="e.g. Pulau Gading BCS Phase 1"
+              autoFocus
             />
           </div>
 
-          <div className="grid gap-4 @sm:grid-cols-2 @lg:grid-cols-3">
+          {/* Three short fields across, then two — the rows the fields
+              themselves ask for, not an even split down the middle. */}
+          <div className="grid gap-4 @sm:grid-cols-3">
             <div className="grid gap-2">
               <Label htmlFor="pf-client">Client</Label>
               <Input
@@ -87,9 +102,18 @@ export default function ProjectForm({
             </div>
           </div>
 
-          <Button type="submit" className="mt-2 w-full">Create project</Button>
+          {/* One full-width bar cut in half, so the two answers to this form
+              carry the same weight and reach the same edges as the fields. */}
+          <div className="mt-2 flex gap-3">
+            <DialogClose render={<Button variant="outline" size="lg" className="flex-1" />}>
+              Cancel
+            </DialogClose>
+            <Button type="submit" size="lg" className="flex-1">
+              Create project
+            </Button>
+          </div>
         </form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 }

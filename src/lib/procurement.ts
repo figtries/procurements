@@ -166,6 +166,60 @@ export function milestoneState(ms: MilestoneEntry): 'done' | 'late' | 'current' 
 }
 
 /* ═══════════════════════════════════════════════════════════
+   PROJECT ROLL-UP
+   One pass over every item, so a list of projects can be sorted
+   and filtered without re-scanning the item table per row.
+   ═══════════════════════════════════════════════════════════ */
+
+/** How a project reads at a glance, in the order a site team triages them. */
+export type ProjectHealth = 'attention' | 'ontrack' | 'done' | 'empty';
+
+export interface ProjectSummary {
+  project: Project;
+  itemCount: number;
+  late: number;
+  atrisk: number;
+  progress: number;
+  health: ProjectHealth;
+  /** Days from today to handover — negative once it has passed, null with no date. */
+  daysToHandover: number | null;
+}
+
+export function summariseProjects(
+  projects: Project[],
+  items: ProcurementItem[],
+): ProjectSummary[] {
+  const byProject = new Map<string, ProcurementItem[]>();
+  for (const item of items) {
+    const list = byProject.get(item.projectId);
+    if (list) list.push(item);
+    else byProject.set(item.projectId, [item]);
+  }
+
+  const todayStr = today();
+
+  return projects.map(project => {
+    const list     = byProject.get(project.id) ?? [];
+    const late     = list.filter(i => i.status === 'late').length;
+    const atrisk   = list.filter(i => i.status === 'atrisk').length;
+    const progress = computeOverallProgress(list);
+    const daysToHandover = project.handover ? daysDiff(todayStr, project.handover) : null;
+
+    // A handover date that has already gone by with work still open is as
+    // loud as a late item — that is the date the contract was written against.
+    const handoverBlown = daysToHandover !== null && daysToHandover < 0 && progress < 100;
+
+    const health: ProjectHealth =
+      list.length === 0             ? 'empty'
+      : progress >= 100             ? 'done'
+      : late > 0 || handoverBlown   ? 'attention'
+      : 'ontrack';
+
+    return { project, itemCount: list.length, late, atrisk, progress, health, daysToHandover };
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
    DASHBOARD AGGREGATIONS
    Everything below derives from data the app already stores —
    no extra input is required from the user.
