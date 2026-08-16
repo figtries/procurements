@@ -16,7 +16,6 @@ import ProjectsPage from '@/components/projects/ProjectsPage';
 import {
   SidebarInset, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { Separator } from '@/components/ui/separator';
 
 import {
   genId,
@@ -382,10 +381,6 @@ export default function ProcurementApp() {
       <SidebarInset>
         <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:px-4">
           <SidebarTrigger className="-ml-1" />
-          {/* On a phone this rule divided nothing — it sat beside the menu
-              button as a stray mark. It only earns its place where there are
-              two sides to keep apart. */}
-          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
           {/* The project, and nothing else. Every page carries its own title a
               few lines down, so naming it up here only said the same thing
               twice on one screen. */}
@@ -398,7 +393,12 @@ export default function ProcurementApp() {
           </button>
         </header>
 
-        <main className="mx-auto w-full max-w-[1120px] px-4 pt-5 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 xl:px-10">
+        {/* The cap is set past the width of an ordinary laptop on purpose: up
+            to there the page stays fluid and the gutters read as margin rather
+            than as a column of dead space, and only a genuinely wide monitor
+            ever sees it bite — at which point a line of text has grown long
+            enough that stopping is the kinder choice. */}
+        <main className="mx-auto w-full max-w-[1440px] px-4 pt-5 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 xl:px-10 2xl:px-12">
           <ViewTransition key={page} name="app-page" share="auto" enter="auto" exit="auto" default="none">
             <div>
               {page === 'dashboard' && (
