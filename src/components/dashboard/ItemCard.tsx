@@ -1,8 +1,13 @@
-import { ChevronRight } from 'lucide-react';
-import type { ProcurementItem } from '@/types';
+import {
+  ChevronRight, CircleDashed, Clock, PackageCheck, TrendingUp, TriangleAlert,
+  type LucideIcon,
+} from 'lucide-react';
+import type { GroupBy, ItemStatus, ProcurementItem } from '@/types';
 import { STATUS_CLASSES, fmtDate, getDisciplineStyle, getNextMilestone } from '@/lib/procurement';
 import StatusBadge from './Badge';
-import { Card } from '@/components/ui/card';
+import {
+  Item, ItemContent, ItemDescription, ItemFooter, ItemMedia, ItemTitle,
+} from '@/components/ui/item';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
@@ -10,91 +15,112 @@ interface ItemCardProps {
   item: ProcurementItem;
   /** Position in its group, used to stagger the entry animation. */
   index?: number;
+  /** The heading already names whatever the list is grouped on, so the row
+   *  does not repeat it. */
+  groupBy?: GroupBy;
   onClick: () => void;
 }
 
 /** Cap the stagger so long lists do not crawl in. */
 const MAX_STAGGER = 8;
 
-export default function ItemCard({ item, index = 0, onClick }: ItemCardProps) {
+/** One glyph per schedule state — the row reads before any of its text does. */
+const STATUS_ICON: Record<ItemStatus, LucideIcon> = {
+  planning: CircleDashed,
+  ontrack:  TrendingUp,
+  atrisk:   Clock,
+  late:     TriangleAlert,
+  onsite:   PackageCheck,
+};
+
+export default function ItemCard({ item, index = 0, groupBy, onClick }: ItemCardProps) {
   const discStyle = getDisciplineStyle(item.discipline);
-  const nextMile = getNextMilestone(item);
+  const nextMile  = getNextMilestone(item);
+  const status    = STATUS_CLASSES[item.status];
+  const Icon      = STATUS_ICON[item.status];
 
   return (
-    <Card
-      size="sm"
-      style={{ animationDelay: `${Math.min(index, MAX_STAGGER) * 35}ms` }}
+    <Item
+      style={{ animationDelay: `${Math.min(index, MAX_STAGGER) * 30}ms` }}
       className={cn(
-        'group relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-3 border-l-[3px] px-3.5 py-3 sm:px-4',
-        'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
-        'transition-shadow duration-200 hover:shadow-sm hover:ring-foreground/25',
-        'has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ring',
-        'md:grid-cols-[minmax(0,1fr)_9rem_8rem_7rem_1.25rem]',
-        STATUS_CLASSES[item.status].border,
+        'relative gap-x-3 rounded-none px-4 py-3 transition-colors hover:bg-muted/50',
+        // Item ships with a transparent 1px border on all four sides; colouring
+        // just the bottom edge turns it into the rule between rows for free.
+        'border-b-border last:border-b-transparent',
+        'motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-backwards',
+        'has-[button:focus-visible]:bg-muted/50 has-[button:focus-visible]:ring-3',
+        'has-[button:focus-visible]:ring-ring/50 has-[button:focus-visible]:ring-inset',
       )}
     >
-      {/* Stretched hit area — keeps the whole row clickable without nesting
-          interactive content inside a button. */}
-      <button
-        type="button"
-        onClick={onClick}
-        className="absolute inset-0 z-10 rounded-xl outline-none"
-      >
+      {/* Stretched hit area — the whole row is the target, without nesting the
+          row's own layout inside a button element. */}
+      <button type="button" onClick={onClick} className="absolute inset-0 z-10 outline-none">
         <span className="sr-only">Open {item.desc}</span>
       </button>
 
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">
-          <span
-            className="mr-2 inline-block rounded px-1.5 py-0.5 align-[1px] text-[10px] font-bold"
-            style={{ background: discStyle.bg, color: discStyle.color }}
-          >
-            {item.discipline}
-          </span>
-          {item.desc}
-        </p>
-        <p className="mt-1 truncate text-xs text-muted-foreground">
-          {item.qty} {item.unit} · PO: {item.poNo || '—'} · {fmtDate(item.poDate)}
-        </p>
-      </div>
+      <ItemMedia variant="icon" className={cn('size-8 rounded-lg', status.chip)}>
+        <Icon className="size-4" />
+      </ItemMedia>
 
-      <div className="hidden min-w-0 md:block">
+      <ItemContent className="min-w-0 gap-1">
+        <ItemTitle className="line-clamp-none flex w-full min-w-0 items-center gap-2">
+          {groupBy !== 'discipline' && (
+            <span
+              className="shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] leading-4 font-bold"
+              style={{ background: discStyle.bg, color: discStyle.color }}
+            >
+              {item.discipline}
+            </span>
+          )}
+          <span className="truncate">{item.desc}</span>
+        </ItemTitle>
+        <ItemDescription className="line-clamp-1 text-xs">
+          {item.qty} {item.unit} · PO {item.poNo || '—'} · {fmtDate(item.poDate)}
+        </ItemDescription>
+      </ItemContent>
+
+      {/* Vendor, progress and state each take a column once there is room for
+          one; below md they fold onto the footer line rather than disappear. */}
+      <ItemContent className="hidden w-36 shrink-0 gap-0.5 md:flex xl:w-44">
         <p className="truncate text-[13px] font-medium">{item.vendor || '—'}</p>
-        {item.brand && <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.brand}</p>}
-      </div>
+        <p className="truncate text-xs text-muted-foreground">{item.brand || '—'}</p>
+      </ItemContent>
 
-      <div className="hidden md:block">
-        <div className="mb-1.5 flex justify-between text-xs font-medium">
+      <div className="hidden w-28 shrink-0 md:block xl:w-32">
+        <div className="mb-1.5 flex items-baseline justify-between gap-2 text-xs">
           <span className="text-muted-foreground">Progress</span>
-          <span className="tabular">{item.progress}%</span>
-        </div>
-        <Progress
-          value={item.progress}
-          indicatorClassName={cn('transition-[width] duration-500', STATUS_CLASSES[item.status].rail)}
-        />
-      </div>
-
-      <div className="hidden flex-col items-start gap-1.5 md:flex">
-        <StatusBadge status={item.status} />
-        {nextMile && <span className="text-[11px] text-muted-foreground">{nextMile}</span>}
-      </div>
-
-      <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5" />
-
-      {/* Phone: status, vendor and progress fold onto a second line rather
-          than disappearing — the schedule state is the whole point of the row. */}
-      <div className="col-span-2 md:hidden">
-        <div className="mb-1.5 flex items-center gap-2">
-          <StatusBadge status={item.status} />
-          <span className="truncate text-xs text-muted-foreground">{item.vendor || '—'}</span>
-          <span className="ml-auto shrink-0 text-xs font-medium tabular">{item.progress}%</span>
+          <span className="font-medium tabular">{item.progress}%</span>
         </div>
         <Progress
           value={item.progress}
           trackClassName="h-1.5"
-          indicatorClassName={cn('transition-[width] duration-500', STATUS_CLASSES[item.status].rail)}
+          indicatorClassName={cn('transition-[width] duration-500', status.rail)}
         />
       </div>
-    </Card>
+
+      <div className="hidden w-[7.5rem] shrink-0 flex-col items-end gap-1 md:flex">
+        <StatusBadge status={item.status} />
+        {nextMile && (
+          <span className="w-full truncate text-right text-[11px] text-muted-foreground">
+            {nextMile}
+          </span>
+        )}
+      </div>
+
+      <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground/60 transition-transform duration-200 group-hover/item:translate-x-0.5" />
+
+      <ItemFooter className="gap-3 md:hidden">
+        <StatusBadge status={item.status} />
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <Progress
+            value={item.progress}
+            className="min-w-0 flex-1"
+            trackClassName="h-1.5"
+            indicatorClassName={cn('transition-[width] duration-500', status.rail)}
+          />
+          <span className="shrink-0 text-xs font-medium tabular">{item.progress}%</span>
+        </div>
+      </ItemFooter>
+    </Item>
   );
 }

@@ -1,37 +1,56 @@
-import { Card } from '@/components/ui/card';
+import type { ItemStatus } from '@/types';
+import {
+  Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle,
+} from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-export type StatVariant = 'default' | 'accent' | 'good' | 'info' | 'warn' | 'crit';
+export type StatTone = 'neutral' | ItemStatus;
 
 interface StatTileProps {
   label: string;
   value: string | number;
   sub?: string;
-  variant?: StatVariant;
+  /** Ties the tile to a schedule state so it reads in the same colours as the badges. */
+  tone?: StatTone;
+  /** A count of zero carries no news — only a live one earns its colour. */
+  active?: boolean;
   /** Lets a tile claim a wider slot — used to fill the odd row on a phone. */
   className?: string;
 }
 
-const VARIANTS: Record<StatVariant, { card: string; value: string; text: string }> = {
-  default: { card: '',                                   value: 'text-foreground',  text: 'text-muted-foreground' },
-  accent:  { card: '',                                   value: 'text-foreground',  text: 'text-muted-foreground' },
-  good:    { card: 'border-transparent bg-ontrack-bg',   value: 'text-ontrack-fg',  text: 'text-ontrack-fg/70' },
-  info:    { card: 'border-transparent bg-onsite-bg',    value: 'text-onsite-fg',   text: 'text-onsite-fg/70' },
-  warn:    { card: 'border-transparent bg-atrisk-bg',    value: 'text-atrisk-fg',   text: 'text-atrisk-fg/70' },
-  crit:    { card: 'border-transparent bg-late-bg',      value: 'text-late-fg',     text: 'text-late-fg/70' },
+/**
+ * Only the states that ask for action are tinted; the healthy ones settle for a
+ * dot. Five equally coloured tiles say nothing about where to look first.
+ */
+const TONES: Record<ItemStatus, { dot: string; value: string; card: string }> = {
+  planning: { dot: 'bg-planning', value: '', card: '' },
+  ontrack:  { dot: 'bg-ontrack',  value: '', card: '' },
+  onsite:   { dot: 'bg-onsite',   value: '', card: '' },
+  atrisk:   { dot: 'bg-atrisk', value: 'text-atrisk-fg', card: 'bg-atrisk-bg/60 ring-atrisk/25' },
+  late:     { dot: 'bg-late',   value: 'text-late-fg',   card: 'bg-late-bg/60 ring-late/25' },
 };
 
 export default function StatTile({
-  label, value, sub, variant = 'default', className,
+  label, value, sub, tone = 'neutral', active = true, className,
 }: StatTileProps) {
-  const v = VARIANTS[variant];
+  const t = tone === 'neutral' || !active ? null : TONES[tone];
+
   return (
-    <Card className={cn('gap-0 rounded-xl px-3.5 py-3 shadow-none sm:px-4 sm:py-3.5', v.card, className)}>
-      <p className={cn('truncate text-xs font-medium', v.text)}>{label}</p>
-      <p className={cn('mt-1.5 text-xl font-semibold leading-none tracking-tight tabular sm:text-2xl', v.value)}>
-        {value}
-      </p>
-      {sub && <p className={cn('mt-1.5 truncate text-[11px]', v.text)}>{sub}</p>}
+    <Card className={cn('gap-1', t?.card, className)}>
+      <CardHeader className="gap-0">
+        <CardDescription className="truncate text-xs font-medium">{label}</CardDescription>
+        <CardAction>
+          <span className={cn('mt-1.5 block size-2 rounded-full', t?.dot ?? 'bg-muted-foreground/25')} />
+        </CardAction>
+        <CardTitle className={cn('text-2xl font-semibold tracking-tight tabular sm:text-3xl', t?.value)}>
+          {value}
+        </CardTitle>
+      </CardHeader>
+      {sub && (
+        <CardContent>
+          <p className="truncate text-xs text-muted-foreground">{sub}</p>
+        </CardContent>
+      )}
     </Card>
   );
 }

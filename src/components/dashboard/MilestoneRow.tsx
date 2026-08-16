@@ -1,6 +1,7 @@
 import { Check, TriangleAlert } from 'lucide-react';
 import type { MilestoneEntry } from '@/types';
 import { fmtDate, milestoneState } from '@/lib/procurement';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface MilestoneRowProps {
@@ -17,6 +18,12 @@ const DOT: Record<string, string> = {
   upcoming: 'bg-muted text-muted-foreground',
 };
 
+const PILL_TONE = {
+  done:  'bg-ontrack-bg text-ontrack-fg',
+  slip:  'bg-atrisk-bg text-atrisk-fg',
+  muted: 'bg-muted text-muted-foreground',
+} as const;
+
 /** One step of the FAT → RTS → MOS timeline. */
 export default function MilestoneRow({ name, ms, index, last }: MilestoneRowProps) {
   const state = milestoneState(ms);
@@ -24,7 +31,7 @@ export default function MilestoneRow({ name, ms, index, last }: MilestoneRowProp
 
   return (
     <div className="relative grid grid-cols-[2.25rem_minmax(0,1fr)] gap-4 pb-6 last:pb-0">
-      {!last && <span className="absolute left-[1.0625rem] top-9 bottom-[-0.25rem] w-px bg-border" />}
+      {!last && <span className="absolute top-9 bottom-[-0.25rem] left-[1.0625rem] w-px bg-border" />}
 
       <span className={cn(
         'z-10 flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-bold',
@@ -40,22 +47,22 @@ export default function MilestoneRow({ name, ms, index, last }: MilestoneRowProp
 
         <div className="mt-2.5 flex flex-wrap gap-2">
           {ms.plan && (
-            <Pill
+            <DatePill
               label="Plan" value={fmtDate(ms.plan)}
               tone={slipped ? 'slip' : ms.actual ? 'done' : 'muted'}
             />
           )}
           {ms.forecast && ms.forecast !== ms.plan && (
-            <Pill label="Forecast" value={fmtDate(ms.forecast)} tone="slip" />
+            <DatePill label="Forecast" value={fmtDate(ms.forecast)} tone="slip" />
           )}
-          {ms.actual && <Pill label="Actual" value={fmtDate(ms.actual)} tone="done" />}
+          {ms.actual && <DatePill label="Actual" value={fmtDate(ms.actual)} tone="done" />}
           {!ms.plan && !ms.forecast && !ms.actual && (
-            <span className="text-xs italic text-muted-foreground">No dates set.</span>
+            <span className="text-xs text-muted-foreground italic">No dates set.</span>
           )}
         </div>
 
         {ms.note && (
-          <p className="mt-2.5 rounded-md border-l-2 border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+          <p className="mt-2.5 rounded-md border-l-2 bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
             {ms.note}
           </p>
         )}
@@ -64,16 +71,16 @@ export default function MilestoneRow({ name, ms, index, last }: MilestoneRowProp
   );
 }
 
-function Pill({ label, value, tone }: { label: string; value: string; tone: 'done' | 'slip' | 'muted' }) {
+function DatePill({
+  label, value, tone,
+}: { label: string; value: string; tone: keyof typeof PILL_TONE }) {
   return (
-    <span className={cn(
-      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs tabular',
-      tone === 'done' ? 'bg-ontrack-bg text-ontrack-fg'
-        : tone === 'slip' ? 'bg-atrisk-bg text-atrisk-fg'
-        : 'bg-muted text-muted-foreground',
-    )}>
-      <span className="text-[10px] font-bold uppercase tracking-wide opacity-70">{label}</span>
+    <Badge
+      variant="secondary"
+      className={cn('h-auto gap-1.5 rounded-md border-transparent px-2 py-1 tabular', PILL_TONE[tone])}
+    >
+      <span className="text-[10px] font-bold tracking-wide uppercase opacity-70">{label}</span>
       <span className="font-semibold">{value}</span>
-    </span>
+    </Badge>
   );
 }

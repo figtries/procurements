@@ -16,6 +16,10 @@ import ProjectsPage from '@/components/projects/ProjectsPage';
 import {
   SidebarInset, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
+import {
+  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
 import { Separator } from '@/components/ui/separator';
 
 import {
@@ -389,18 +393,45 @@ export default function ProcurementApp() {
       <SidebarInset>
         <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b bg-background/80 px-3 backdrop-blur-sm sm:px-4">
           <SidebarTrigger className="-ml-1" />
-          <Separator orientation="vertical" className="mr-1 h-4" />
-          {/* Stacked on a phone, where there is no room for a breadcrumb; the
-              project reads as the title and the page as its caption. */}
-          <div className="flex min-w-0 flex-col justify-center leading-tight sm:flex-row sm:items-center sm:gap-2">
-            <span className="truncate text-sm font-medium">
-              {activeProject?.name ?? 'Procurement'}
-            </span>
-            <span className="hidden text-muted-foreground/50 sm:inline">/</span>
-            <span className="truncate text-[11px] text-muted-foreground sm:text-sm">
-              {PAGE_TITLES[page]}
-            </span>
-          </div>
+          {/* On a phone this rule divided nothing — it sat beside the menu
+              button as a stray mark. It only earns its place where there are
+              two sides to keep apart. */}
+          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+          <Breadcrumb className="min-w-0">
+            <BreadcrumbList className="flex-nowrap gap-1.5 sm:gap-2">
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbLink
+                  className="cursor-pointer truncate"
+                  render={<button type="button" onClick={() => nav('projects')} />}
+                >
+                  {activeProject?.name ?? 'Procurement'}
+                </BreadcrumbLink>
+              </BreadcrumbItem>
+
+              {/* The middle crumb is the first thing to go when the screen
+                  cannot hold all three. */}
+              {page === 'itemDetail' && (
+                <>
+                  <BreadcrumbSeparator className="hidden sm:flex" />
+                  <BreadcrumbItem className="hidden shrink-0 sm:inline-flex">
+                    <BreadcrumbLink
+                      className="cursor-pointer"
+                      render={<button type="button" onClick={() => nav('overview')} />}
+                    >
+                      Overview
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                </>
+              )}
+
+              <BreadcrumbSeparator className="flex shrink-0 items-center" />
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbPage className="truncate">
+                  {page === 'itemDetail' && detailItem ? detailItem.desc : PAGE_TITLES[page]}
+                </BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
         </header>
 
         <main className="mx-auto w-full max-w-[1120px] px-4 pt-5 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 xl:px-10">

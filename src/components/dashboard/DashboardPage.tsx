@@ -209,24 +209,24 @@ export default function DashboardPage({
         <StatTile
           className="col-span-2 md:col-span-1"
           label="Total items" value={items.length}
-          sub={`${disciplines.length} disciplines · ${uniqueVendors} vendors`} variant="accent"
+          sub={`${disciplines.length} disciplines · ${uniqueVendors} vendors`}
         />
         <StatTile
           label="On Site" value={counts.onsite}
           sub={`${Math.round((counts.onsite / items.length) * 100)}% delivered`}
-          variant={counts.onsite > 0 ? 'good' : 'default'}
+          tone="onsite" active={counts.onsite > 0}
         />
         <StatTile
           label="On Track" value={counts.ontrack} sub="On schedule"
-          variant={counts.ontrack > 0 ? 'info' : 'default'}
+          tone="ontrack" active={counts.ontrack > 0}
         />
         <StatTile
           label="At Risk" value={counts.atrisk} sub="FAT within 14 days"
-          variant={counts.atrisk > 0 ? 'warn' : 'default'}
+          tone="atrisk" active={counts.atrisk > 0}
         />
         <StatTile
           label="Late" value={counts.late} sub="Overdue"
-          variant={counts.late > 0 ? 'crit' : 'default'}
+          tone="late" active={counts.late > 0}
         />
       </div>
 

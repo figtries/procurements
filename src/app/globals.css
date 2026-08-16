@@ -272,6 +272,9 @@
   [data-slot='button'][data-size='lg'],
   [data-slot='select-trigger'],
   [data-slot='input'],
+  /* The group owns the height when an input is wrapped in one — the control
+     inside reports itself as `input-group-control`, not `input`. */
+  [data-slot='input-group'],
   [data-slot='tabs-list'],
   [data-slot='sidebar-menu-button'] {
     min-height: 2.25rem;
