@@ -72,8 +72,8 @@ export default function SCurveChart({ points }: SCurveChartProps) {
       >
         <defs>
           <linearGradient id="scurve-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--st-onsite)" stopOpacity="0.20" />
-            <stop offset="100%" stopColor="var(--st-onsite)" stopOpacity="0.01" />
+            <stop offset="0%" stopColor="var(--info)" stopOpacity="0.20" />
+            <stop offset="100%" stopColor="var(--info)" stopOpacity="0.01" />
           </linearGradient>
         </defs>
 
@@ -102,14 +102,14 @@ export default function SCurveChart({ points }: SCurveChartProps) {
         {fcPath && (
           <path
             d={fcPath} fill="none"
-            stroke="var(--st-ontrack)" strokeWidth={2}
+            stroke="var(--ok)" strokeWidth={2}
             strokeDasharray="5 4" strokeLinecap="round"
           />
         )}
         {actPath && (
           <path
             d={actPath} fill="none"
-            stroke="var(--st-onsite)" strokeWidth={2.5}
+            stroke="var(--info)" strokeWidth={2.5}
             strokeLinejoin="round" strokeLinecap="round"
           />
         )}
@@ -128,7 +128,7 @@ export default function SCurveChart({ points }: SCurveChartProps) {
             />
             <circle
               cx={x(lastActualIdx)} cy={y(lastActual.actual)} r={5.5}
-              fill="var(--st-onsite)" stroke="var(--card)" strokeWidth={2.5}
+              fill="var(--info)" stroke="var(--card)" strokeWidth={2.5}
             />
           </>
         )}

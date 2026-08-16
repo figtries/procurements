@@ -243,7 +243,7 @@ export default function ImportModal({
                             'align-top transition-colors',
                             'motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-backwards',
                             isDup && 'bg-atrisk-bg',
-                            row.matchesItemId && 'bg-onsite-bg',
+                            row.matchesItemId && 'bg-info-bg',
                             !row.include && 'opacity-50',
                           )}
                         >
@@ -266,7 +266,7 @@ export default function ImportModal({
                               {row.matchesItemId && (
                                 <Badge
                                   variant="secondary"
-                                  className="border-transparent bg-onsite-bg px-1.5 py-0 text-[9px] text-onsite-fg"
+                                  className="border-transparent bg-info-bg px-1.5 py-0 text-[9px] text-info-fg"
                                 >
                                   updating
                                 </Badge>
@@ -306,7 +306,7 @@ export default function ImportModal({
                           </TableCell>
                           <TableCell className="hidden whitespace-nowrap text-xs tabular md:table-cell">
                             {fatDate ? fmtDate(fatDate) : '—'}
-                            {row.fat.actual && <span className="ml-1 font-bold text-ontrack-fg">✓</span>}
+                            {row.fat.actual && <span className="ml-1 font-bold text-ok-fg">✓</span>}
                           </TableCell>
                           <TableCell className="hidden whitespace-nowrap text-xs tabular md:table-cell">
                             {mosDate ? fmtDate(mosDate) : '—'}

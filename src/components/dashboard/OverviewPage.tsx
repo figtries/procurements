@@ -112,10 +112,10 @@ function WarnBanners({
 
   if (late === 0 && atrisk === 0) {
     return (
-      <Alert className="border-ontrack/25 bg-ontrack-bg text-ontrack-fg motion-safe:animate-in motion-safe:fade-in">
+      <Alert className="border-ok/25 bg-ok-bg text-ok-fg motion-safe:animate-in motion-safe:fade-in">
         <CheckCircle2 />
         <AlertTitle>All items on track.</AlertTitle>
-        <AlertDescription className="text-ontrack-fg/80">
+        <AlertDescription className="text-ok-fg/80">
           Nothing critical needs your attention.
         </AlertDescription>
       </Alert>

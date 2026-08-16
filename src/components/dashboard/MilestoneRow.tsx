@@ -11,15 +11,18 @@ interface MilestoneRowProps {
   last?: boolean;
 }
 
+/* A cleared step is green and the one in play is blue, said with the
+   semantic pair rather than with two status colours that happen to be
+   those hues today. */
 const DOT: Record<string, string> = {
-  done:     'bg-ontrack text-white',
+  done:     'bg-ok text-white',
   late:     'bg-late text-white ring-4 ring-late-bg',
-  current:  'bg-onsite text-white ring-4 ring-onsite-bg',
+  current:  'bg-info text-white ring-4 ring-info-bg',
   upcoming: 'bg-muted text-muted-foreground',
 };
 
 const PILL_TONE = {
-  done:  'bg-ontrack-bg text-ontrack-fg',
+  done:  'bg-ok-bg text-ok-fg',
   slip:  'bg-atrisk-bg text-atrisk-fg',
   muted: 'bg-muted text-muted-foreground',
 } as const;

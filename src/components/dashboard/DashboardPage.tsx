@@ -8,11 +8,12 @@ import {
 import type { Anomaly, ProcurementItem, Project } from '@/types';
 import {
   buildLookahead, buildSCurve, computeDeviation, daysDiff, detectAnomalies,
-  disciplineBreakdown, fmtDate, getDisciplineStyle, milestoneStats, today, vendorStats,
+  disciplineBreakdown, fmtDate, milestoneStats, today, vendorStats,
 } from '@/lib/procurement';
 import SCurveChart from './SCurveChart';
 import StatTile from './StatTile';
 import StatusBadge from './Badge';
+import DisciplineBadge from './DisciplineBadge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -47,15 +48,19 @@ const ANOMALY_ICON = {
   'delivered-no-do': PackageSearch,
 } as const;
 
+/* The three milestones read as a journey: FAT is the checkpoint you are
+   working towards, RTS the crossing, MOS the arrival — so the last one is
+   the green. These are the semantic hues, not the status ones; a milestone
+   kind is not a schedule state. */
 const MS_ACCENT: Record<string, string> = {
-  fat: 'bg-onsite-bg text-onsite-fg',
+  fat: 'bg-info-bg text-info-fg',
   rts: 'bg-rts-bg text-rts-fg',
-  mos: 'bg-ontrack-bg text-ontrack-fg',
+  mos: 'bg-ok-bg text-ok-fg',
 };
 
 /** Readiness rail colour — shared by the vendor table and its phone stack. */
 function readinessTone(pct: number) {
-  return pct < 50 ? 'bg-late' : pct < 90 ? 'bg-atrisk' : 'bg-ontrack';
+  return pct < 50 ? 'bg-late' : pct < 90 ? 'bg-atrisk' : 'bg-ok';
 }
 
 export default function DashboardPage({
@@ -134,7 +139,7 @@ export default function DashboardPage({
           <CardContent className="flex h-full flex-col">
             <p className={cn(
               'text-3xl font-semibold leading-none tracking-tight tabular sm:text-4xl',
-              behind ? 'text-late' : 'text-ontrack',
+              behind ? 'text-late' : 'text-ok',
             )}>
               {deviation.deviation > 0 ? '+' : deviation.deviation < 0 ? '−' : ''}
               {Math.abs(deviation.deviation)}
@@ -169,7 +174,7 @@ export default function DashboardPage({
 
             <div className="mt-5 space-y-2.5">
               <Bar label="Plan" value={deviation.planPct} className="bg-late" />
-              <Bar label="Act"  value={deviation.actualPct} className="bg-onsite" />
+              <Bar label="Act"  value={deviation.actualPct} className="bg-info" />
             </div>
 
             {project?.handover && (
@@ -192,8 +197,8 @@ export default function DashboardPage({
                 competing with it for the same row. */}
             <CardAction className="flex flex-wrap gap-x-4 gap-y-1.5 max-sm:col-start-1 max-sm:row-start-2 max-sm:mt-2 max-sm:justify-self-start">
               <Legend swatch="bg-late" label="Plan" />
-              <Legend swatch="bg-onsite" label="Actual" />
-              <Legend swatch="bg-ontrack" label="Forecast" />
+              <Legend swatch="bg-info" label="Actual" />
+              <Legend swatch="bg-ok" label="Forecast" />
             </CardAction>
           </CardHeader>
           <CardContent>
@@ -253,12 +258,12 @@ export default function DashboardPage({
                     </span>
                   </div>
                   <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
-                    <div className="bg-ontrack" style={{ width: `${pct(ms.done)}%` }} />
+                    <div className="bg-ok" style={{ width: `${pct(ms.done)}%` }} />
                     <div className="bg-atrisk"  style={{ width: `${pct(ms.scheduled)}%` }} />
                     <div className="bg-late"    style={{ width: `${pct(ms.overdue)}%` }} />
                   </div>
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-                    <Key swatch="bg-ontrack" label="Done" n={ms.done} />
+                    <Key swatch="bg-ok" label="Done" n={ms.done} />
                     <Key swatch="bg-atrisk" label="Scheduled" n={ms.scheduled} />
                     <Key swatch="bg-late" label="Overdue" n={ms.overdue} />
                     {ms.unplanned > 0 && (
@@ -280,17 +285,11 @@ export default function DashboardPage({
           <CardContent className="flex h-full flex-col">
             <div className="flex flex-1 flex-col justify-evenly gap-3">
               {disciplines.map(d => {
-                const style = getDisciplineStyle(d.discipline);
                 const w = (n: number) => (d.total ? (n / d.total) * 100 : 0);
                 return (
                   <div key={d.discipline} className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
-                      <span
-                        className="truncate rounded px-2 py-0.5 text-[11px] font-semibold"
-                        style={{ background: style.bg, color: style.color }}
-                      >
-                        {d.discipline}
-                      </span>
+                      <DisciplineBadge discipline={d.discipline} className="min-w-0 truncate" />
                       <span className="shrink-0 text-sm font-semibold tabular">
                         {d.total}
                         <span className="font-normal text-muted-foreground">
@@ -347,13 +346,13 @@ export default function DashboardPage({
                 className={cn(
                   'min-h-36 rounded-xl border p-3',
                   'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
-                  week.isCurrent ? 'border-onsite/30 bg-onsite-bg/60' : 'bg-muted/40',
+                  week.isCurrent ? 'border-info/30 bg-info-bg/60' : 'bg-muted/40',
                 )}
               >
                 <div className="mb-2.5 flex items-baseline justify-between gap-2">
                   <span className={cn(
                     'text-[11px] font-bold uppercase tracking-wider',
-                    week.isCurrent ? 'text-onsite-fg' : 'text-muted-foreground',
+                    week.isCurrent ? 'text-info-fg' : 'text-muted-foreground',
                   )}>
                     {week.label}
                   </span>
@@ -375,9 +374,9 @@ export default function DashboardPage({
                           'transition-all duration-200 hover:-translate-y-px hover:shadow-sm hover:ring-foreground/20',
                           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                           ev.overdue ? 'border-l-late bg-late-bg'
-                            : ev.kind === 'fat' ? 'border-l-onsite'
+                            : ev.kind === 'fat' ? 'border-l-info'
                             : ev.kind === 'rts' ? 'border-l-rts'
-                            : 'border-l-ontrack',
+                            : 'border-l-ok',
                         )}
                       >
                         <span className="mb-1 flex items-center gap-1.5">
@@ -429,10 +428,10 @@ export default function DashboardPage({
         </CardHeader>
         <CardContent>
           {anomalies.length === 0 ? (
-            <Alert className="border-ontrack/25 bg-ontrack-bg text-ontrack-fg">
+            <Alert className="border-ok/25 bg-ok-bg text-ok-fg">
               <CheckCircle2 />
               <AlertTitle>No anomalies</AlertTitle>
-              <AlertDescription className="text-ontrack-fg/80">
+              <AlertDescription className="text-ok-fg/80">
                 Every item has a sensible schedule and complete documents.
               </AlertDescription>
             </Alert>

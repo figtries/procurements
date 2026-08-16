@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { ProcurementItem } from '@/types';
-import { DISCIPLINES } from '@/lib/procurement';
+import { DISCIPLINES, getDisciplineStyle } from '@/lib/procurement';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -155,18 +155,28 @@ export default function ItemFormModal({
 
           <div className="grid gap-2">
             <Label>Discipline <span className="text-destructive">*</span></Label>
+            {/* Each option carries the colour it will wear on the board, so
+                picking one is not a guess about how the row will read. */}
             <div className="flex flex-wrap gap-2">
-              {DISCIPLINES.map(d => (
-                <Button
-                  key={d}
-                  type="button"
-                  size="sm"
-                  variant={form.discipline === d ? 'default' : 'outline'}
-                  onClick={() => setForm(f => ({ ...f, discipline: d }))}
-                >
-                  {d}
-                </Button>
-              ))}
+              {DISCIPLINES.map(d => {
+                const selected = form.discipline === d;
+                const style = getDisciplineStyle(d);
+                return (
+                  <Button
+                    key={d}
+                    type="button"
+                    size="sm"
+                    variant={selected ? 'default' : 'outline'}
+                    onClick={() => setForm(f => ({ ...f, discipline: d }))}
+                  >
+                    <span
+                      className="size-1.5 rounded-full"
+                      style={{ background: selected ? style.bg : style.color }}
+                    />
+                    {d}
+                  </Button>
+                );
+              })}
             </div>
             {errors.discipline && <p className="text-xs text-destructive">{errors.discipline}</p>}
           </div>

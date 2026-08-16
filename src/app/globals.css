@@ -45,16 +45,32 @@
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
 
+  /* ── Semantic pair ──
+     A green that means "done well" and a blue that means "in hand", named
+     for what they say rather than for whichever status happens to wear
+     them. A success tick, a completed milestone and a full readiness bar
+     all want the same green, and none of them should follow On Track
+     around if the schedule palette is ever re-cut. */
+  --ok:        oklch(0.60 0.14 152);
+  --ok-bg:     oklch(0.960 0.032 152);
+  --ok-fg:     oklch(0.45 0.11 152);
+
+  --info:      oklch(0.55 0.16 255);
+  --info-bg:   oklch(0.955 0.028 255);
+  --info-fg:   oklch(0.46 0.15 255);
+
   /* ── Status colours ──
      Semantic, deliberately separate from the neutral accent: on a
-     procurement board the schedule state has to read at a glance. */
-  --st-onsite:      oklch(0.55 0.16 255);
-  --st-onsite-bg:   oklch(0.955 0.028 255);
-  --st-onsite-fg:   oklch(0.46 0.15 255);
+     procurement board the schedule state has to read at a glance.
+     On Site is the finished state, so it takes the green; On Track is work
+     still in hand, so it takes the blue. */
+  --st-onsite:      var(--ok);
+  --st-onsite-bg:   var(--ok-bg);
+  --st-onsite-fg:   var(--ok-fg);
 
-  --st-ontrack:     oklch(0.60 0.14 152);
-  --st-ontrack-bg:  oklch(0.960 0.032 152);
-  --st-ontrack-fg:  oklch(0.45 0.11 152);
+  --st-ontrack:     var(--info);
+  --st-ontrack-bg:  var(--info-bg);
+  --st-ontrack-fg:  var(--info-fg);
 
   --st-atrisk:      oklch(0.76 0.15 75);
   --st-atrisk-bg:   oklch(0.965 0.040 85);
@@ -126,13 +142,21 @@
   --sidebar-ring: oklch(0.556 0 0);
 
   /* Status tints invert: lift the text, sink the ground. */
-  --st-onsite:      oklch(0.68 0.16 255);
-  --st-onsite-bg:   oklch(0.28 0.055 255);
-  --st-onsite-fg:   oklch(0.82 0.11 255);
+  --ok:        oklch(0.70 0.15 152);
+  --ok-bg:     oklch(0.28 0.055 152);
+  --ok-fg:     oklch(0.84 0.11 152);
 
-  --st-ontrack:     oklch(0.70 0.15 152);
-  --st-ontrack-bg:  oklch(0.28 0.055 152);
-  --st-ontrack-fg:  oklch(0.84 0.11 152);
+  --info:      oklch(0.68 0.16 255);
+  --info-bg:   oklch(0.28 0.055 255);
+  --info-fg:   oklch(0.82 0.11 255);
+
+  --st-onsite:      var(--ok);
+  --st-onsite-bg:   var(--ok-bg);
+  --st-onsite-fg:   var(--ok-fg);
+
+  --st-ontrack:     var(--info);
+  --st-ontrack-bg:  var(--info-bg);
+  --st-ontrack-fg:  var(--info-fg);
 
   --st-atrisk:      oklch(0.80 0.15 80);
   --st-atrisk-bg:   oklch(0.30 0.055 75);
@@ -200,6 +224,16 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Semantic utilities: bg-ok, text-ok-fg, bg-info-bg, … — for anything
+     saying "this went well" or "here is where you are", as opposed to
+     naming a schedule state. */
+  --color-ok: var(--ok);
+  --color-ok-bg: var(--ok-bg);
+  --color-ok-fg: var(--ok-fg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-fg: var(--info-fg);
 
   /* Status utilities: bg-onsite, text-onsite-fg, bg-late-bg, … */
   --color-onsite: var(--st-onsite);

@@ -2,8 +2,9 @@
 
 import { ArrowLeft, Clock, Package, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import type { ProcurementItem } from '@/types';
-import { fmtDate, getDisciplineStyle } from '@/lib/procurement';
+import { fmtDate } from '@/lib/procurement';
 import StatusBadge from './Badge';
+import DisciplineBadge from './DisciplineBadge';
 import MilestoneRow from './MilestoneRow';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +33,7 @@ function splitDoNumbers(raw: string): string[] {
 const READINESS_TONES = {
   low:  { value: 'text-late-fg',    rail: 'bg-late' },
   mid:  { value: 'text-atrisk-fg',  rail: 'bg-atrisk' },
-  full: { value: 'text-ontrack-fg', rail: 'bg-ontrack' },
+  full: { value: 'text-ok-fg',      rail: 'bg-ok' },
 } as const;
 
 /** A headline figure over its own rail — used for progress and readiness. */
@@ -66,7 +67,6 @@ function Meter({
 }
 
 export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetailProps) {
-  const discStyle = getDisciplineStyle(item.discipline);
   const isLate   = item.status === 'late';
   const isAtRisk = item.status === 'atrisk';
 
@@ -122,12 +122,7 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
             {/* Discipline leads, status follows — what the item *is* before how
                 it is doing. The title carries the description on its own. */}
             <div className="flex flex-wrap items-center gap-2">
-              <span
-                className="inline-block rounded px-2 py-0.5 text-[11px] font-bold"
-                style={{ background: discStyle.bg, color: discStyle.color }}
-              >
-                {item.discipline}
-              </span>
+              <DisciplineBadge discipline={item.discipline} />
               <StatusBadge status={item.status} />
             </div>
             <h1 className="font-heading text-xl leading-tight font-semibold tracking-tight text-balance sm:text-2xl">
@@ -220,7 +215,7 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
                     <Badge
                       key={`${no}-${i}`}
                       variant="secondary"
-                      className="h-auto gap-1.5 rounded-lg bg-ontrack-bg px-2.5 py-1.5 text-sm font-semibold text-ontrack-fg tabular"
+                      className="h-auto gap-1.5 rounded-lg bg-ok-bg px-2.5 py-1.5 text-sm font-semibold text-ok-fg tabular"
                     >
                       <Package />
                       {no}

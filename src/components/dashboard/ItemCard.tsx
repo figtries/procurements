@@ -3,8 +3,9 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { GroupBy, ItemStatus, ProcurementItem } from '@/types';
-import { STATUS_CLASSES, fmtDate, getDisciplineStyle, getNextMilestone } from '@/lib/procurement';
+import { STATUS_CLASSES, fmtDate, getNextMilestone } from '@/lib/procurement';
 import StatusBadge from './Badge';
+import DisciplineBadge from './DisciplineBadge';
 import {
   Item, ItemContent, ItemDescription, ItemFooter, ItemMedia, ItemTitle,
 } from '@/components/ui/item';
@@ -34,7 +35,6 @@ const STATUS_ICON: Record<ItemStatus, LucideIcon> = {
 };
 
 export default function ItemCard({ item, index = 0, groupBy, onClick }: ItemCardProps) {
-  const discStyle = getDisciplineStyle(item.discipline);
   const nextMile  = getNextMilestone(item);
   const status    = STATUS_CLASSES[item.status];
   const Icon      = STATUS_ICON[item.status];
@@ -65,12 +65,7 @@ export default function ItemCard({ item, index = 0, groupBy, onClick }: ItemCard
       <ItemContent className="min-w-0 gap-1">
         <ItemTitle className="line-clamp-none flex w-full min-w-0 items-center gap-2">
           {groupBy !== 'discipline' && (
-            <span
-              className="shrink-0 rounded-sm px-1.5 py-0.5 text-[10px] leading-4 font-bold"
-              style={{ background: discStyle.bg, color: discStyle.color }}
-            >
-              {item.discipline}
-            </span>
+            <DisciplineBadge discipline={item.discipline} size="sm" />
           )}
           <span className="truncate">{item.desc}</span>
         </ItemTitle>
