@@ -95,6 +95,11 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
+    // Embla is the external system this effect exists to subscribe to, and it
+    // already holds a position by the time we attach. Reading it once here is
+    // what the subscription cannot do for us — the first "select" event only
+    // arrives when the carousel next moves, which may be never.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     onSelect(api)
     api.on("reInit", onSelect)
     api.on("select", onSelect)
