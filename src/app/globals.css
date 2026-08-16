@@ -291,6 +291,51 @@
   table, .tabular {
     font-variant-numeric: tabular-nums;
   }
+
+  /* ── Date fields ──
+     WebKit sizes these from their contents rather than from the box they
+     are put in: the field keeps a native intrinsic width and the inner
+     value element carries a min-width of its own, so `w-full` is quietly
+     ignored. On iOS that is enough to push a form row — and with it the
+     card, the sheet and the page — off the side of the phone, which is
+     why the same screens sit flush on Android and spill on an iPhone.
+     Taking the native metrics away hands sizing back to the layout.
+
+     Kept general rather than pinned to `date`, so a time or month field
+     added later starts out behaving. */
+  input[type='date'],
+  input[type='time'],
+  input[type='datetime-local'],
+  input[type='month'],
+  input[type='week'] {
+    -webkit-appearance: none;
+    appearance: none;
+    /* Inline-block is where the intrinsic sizing enters. */
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  /* The value box: unpin its width, and left-align it so a date reads on
+     the same line as the text fields above it instead of floating in the
+     middle of the box, which is what made an empty one look broken. */
+  input::-webkit-date-and-time-value {
+    min-width: 0;
+    margin: 0;
+    text-align: left;
+  }
+  input::-webkit-datetime-edit,
+  input::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+  /* Resetting the appearance also dims the picker button on Chromium; the
+     field is still the way you open the calendar, so keep it legible. */
+  input::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
+  }
+  input::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
