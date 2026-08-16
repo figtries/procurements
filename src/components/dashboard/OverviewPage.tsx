@@ -248,7 +248,7 @@ export default function OverviewPage({
           <InputGroupInput
             value={search}
             onChange={e => startFilter(() => onSearch(e.target.value))}
-            placeholder="Search items, vendor, brand or PO number…"
+            placeholder="Search items…"
           />
           {search && (
             <InputGroupAddon align="inline-end">

@@ -3,9 +3,7 @@
 import { useMemo, useState, useTransition } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import type { ProcurementItem, Project } from '@/types';
-import {
-  type ProjectHealth, type ProjectSummary, summariseProjects,
-} from '@/lib/procurement';
+import { type ProjectSummary, summariseProjects } from '@/lib/procurement';
 import ProjectHero from './ProjectHero';
 import ProjectForm from './ProjectForm';
 import ProjectTable from './ProjectTable';
@@ -16,7 +14,6 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface ProjectFormState {
   name: string;
@@ -26,21 +23,6 @@ interface ProjectFormState {
   contractNo: string;
   handover: string;
 }
-
-/** Filters are named after the question being asked, not after a data field. */
-type HealthFilter = 'all' | ProjectHealth;
-
-/**
- * A project with nothing in it yet has no shortlist of its own — it turns up
- * under All like everything else. Filtering to a set that can only ever be
- * empty of work was one tab too many.
- */
-const HEALTH_TABS: Array<{ value: HealthFilter; label: string }> = [
-  { value: 'all',       label: 'All' },
-  { value: 'attention', label: 'Needs attention' },
-  { value: 'ontrack',   label: 'On track' },
-  { value: 'done',      label: 'Delivered' },
-];
 
 type SortKey = 'attention' | 'handover' | 'progress' | 'recent' | 'name';
 
@@ -94,7 +76,6 @@ export default function ProjectsPage({
   /** Filtering runs in a transition so the table crossfades instead of snapping. */
   const [, startFilter] = useTransition();
   const [query, setQuery]   = useState('');
-  const [health, setHealth] = useState<HealthFilter>('all');
   // Late work first by default: on a list of live jobs that is the order
   // anyone opening this page is actually looking for.
   const [sort, setSort]     = useState<SortKey>('attention');
@@ -104,7 +85,6 @@ export default function ProjectsPage({
     [projects, items],
   );
 
-  /** Search runs first, so the tab counts only ever promise rows that exist. */
   const matched = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return summaries;
@@ -113,23 +93,15 @@ export default function ProjectsPage({
         .some(v => (v ?? '').toLowerCase().includes(q)));
   }, [summaries, query]);
 
-  const counts = useMemo(() => {
-    const out: Record<HealthFilter, number> = {
-      all: matched.length, attention: 0, ontrack: 0, done: 0, empty: 0,
-    };
-    for (const row of matched) out[row.health]++;
-    return out;
-  }, [matched]);
+  const visible = useMemo(
+    () => [...matched].sort(COMPARATORS[sort]),
+    [matched, sort],
+  );
 
-  const visible = useMemo(() => {
-    const rows = health === 'all' ? matched : matched.filter(r => r.health === health);
-    return [...rows].sort(COMPARATORS[sort]);
-  }, [matched, health, sort]);
-
-  const hasFilters = !!query.trim() || health !== 'all';
+  const hasFilters = !!query.trim();
 
   function clearFilters() {
-    startFilter(() => { setQuery(''); setHealth('all'); });
+    startFilter(() => setQuery(''));
   }
 
   return (
@@ -140,9 +112,6 @@ export default function ProjectsPage({
           <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
             Projects
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {projects.length} project{projects.length === 1 ? '' : 's'} · pick one to make it active
-          </p>
         </div>
 
         <Button size="lg" className="shrink-0 max-sm:w-full" onClick={() => onFormOpenChange(true)}>
@@ -165,9 +134,9 @@ export default function ProjectsPage({
           All projects
         </h2>
 
-        {/* Search and order on one line, then the shortlist tabs below them —
-            two decisions rather than a row of dropdowns that all look alike. */}
-        <div className="space-y-2.5">
+        {/* Search and order, and nothing else: the health tabs asked the same
+            question the sort already answers, so the row went. */}
+        <div>
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center">
             <InputGroup className="sm:flex-1">
               <InputGroupAddon>
@@ -176,7 +145,7 @@ export default function ProjectsPage({
               <InputGroupInput
                 value={query}
                 onChange={e => startFilter(() => setQuery(e.target.value))}
-                placeholder="Search name, client, location, contract no or PIC…"
+                placeholder="Search projects…"
               />
               {query && (
                 <InputGroupAddon align="inline-end">
@@ -206,45 +175,6 @@ export default function ProjectsPage({
                 ))}
               </SelectContent>
             </Select>
-          </div>
-
-          <div className="flex items-start gap-2">
-            {/* Five labels do not fit one line on a phone, so they wrap onto a
-                second row. Nothing here scrolls sideways: a filter you have to
-                go looking for by dragging is a filter nobody finds. */}
-            <Tabs
-              className="min-w-0 flex-1 sm:flex-none"
-              value={health}
-              onValueChange={v => startFilter(() => setHealth(v as HealthFilter))}
-            >
-              {/* The height is forced: TabsList pins itself to h-8 through a
-                  group variant, which a plain `h-auto` sits alongside rather
-                  than replaces — and a fixed height would leave the second row
-                  hanging outside the box it belongs to. */}
-              <TabsList className="w-full flex-wrap justify-start gap-0.5 max-sm:h-auto! sm:w-fit sm:flex-nowrap sm:gap-0">
-                {HEALTH_TABS.map(tab => (
-                  <TabsTrigger
-                    key={tab.value}
-                    value={tab.value}
-                    className="h-7 flex-none px-2.5 sm:h-[calc(100%-1px)]"
-                  >
-                    {tab.label}
-                    <span className="tabular text-xs opacity-60">{counts[tab.value]}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-
-            {hasFilters && (
-              <Button
-                variant="ghost" size="sm"
-                className="ml-auto shrink-0 text-muted-foreground motion-safe:animate-in motion-safe:fade-in"
-                onClick={clearFilters}
-              >
-                <X />
-                Clear
-              </Button>
-            )}
           </div>
         </div>
 
