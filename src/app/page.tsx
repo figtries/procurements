@@ -80,6 +80,14 @@ export default function ProcurementApp() {
   /* ── Item detail ── */
   const [detailItem, setDetailItem] = useState<ProcurementItem | null>(null);
 
+  /** The one row allowed to fly between the list and the detail screen.
+   *
+   *  Naming every row would hand the browser a separate snapshot per item
+   *  and cut that many holes in the page snapshot, for a morph only one of
+   *  them will ever run. Only the row being opened is named, and only while
+   *  the list and the screen it opens are the two ends in play. */
+  const [morphItemId, setMorphItemId] = useState<string | null>(null);
+
   /* ── Item form modal ── */
   const [formOpen, setFormOpen]       = useState(false);
   const [editingItem, setEditingItem] = useState<ProcurementItem | null>(null);
@@ -124,17 +132,29 @@ export default function ProcurementApp() {
    *  transition snapshots the old page where it currently sits — so the
    *  scroll has to settle in the same frame the snapshot is taken, or the
    *  outgoing image animates from one place while the incoming one starts
-   *  from another. */
+   *  from another.
+   *
+   *  Nothing else belongs in here. An earlier pass gave each direction its
+   *  own travel distance by writing a custom property to the root element,
+   *  which measured at ~12ms of forced style recalc on every navigation —
+   *  a whole document invalidated, synchronously, before React had even
+   *  begun rendering the page being asked for. Which way a swap is going is
+   *  already said by the row that flies between the list and the item it
+   *  opens; it was not worth buying twice. */
   function startPageSwap(update: () => void) {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     startNav(update);
   }
 
   function nav(p: PageName) {
+    // Leaving the list-and-detail pair behind: nothing left to fly between,
+    // and a name with only one end to it animates on its own.
+    if (p !== 'overview' && p !== 'itemDetail') setMorphItemId(null);
     startPageSwap(() => setPage(p));
   }
 
   function openDetail(item: ProcurementItem) {
+    setMorphItemId(item.id);
     startPageSwap(() => {
       setDetailItem(item);
       setPage('itemDetail');
@@ -331,6 +351,8 @@ export default function ProcurementApp() {
       setItems(updated);
       saveItems(updated);
       if (detailItem?.id === deleteTarget.id) {
+        // The row this screen would fly back to no longer exists.
+        setMorphItemId(null);
         startPageSwap(() => {
           setDetailItem(null);
           setPage('overview');
@@ -465,12 +487,14 @@ export default function ProcurementApp() {
                   exporting={exporting}
                   onAddItem={() => openItemForm()}
                   onOpenDetail={openDetail}
+                  morphItemId={morphItemId}
                 />
               )}
 
               {page === 'itemDetail' && detailItem && (
                 <ItemDetail
                   item={detailItem}
+                  morph={morphItemId === detailItem.id}
                   onBack={() => nav('overview')}
                   onEdit={item => openItemForm(item)}
                   onDelete={item => confirmDeleteItem(item)}

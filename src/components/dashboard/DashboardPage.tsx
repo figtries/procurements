@@ -303,13 +303,15 @@ export default function DashboardPage({
         <CardContent>
           <ViewTransition key={weeks} name="lookahead" share="auto" enter="auto" exit="auto" default="none">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {lookahead.slice(0, 4).map((week, wi) => (
+            {/* No entry animation of their own: the <ViewTransition> above
+                already carries this grid on and off, and a stagger underneath
+                it means every column arrives twice, the second time slower
+                than the first. */}
+            {lookahead.slice(0, 4).map(week => (
               <div
                 key={week.label}
-                style={{ animationDelay: `${wi * 45}ms` }}
                 className={cn(
                   'min-h-36 rounded-xl border p-3',
-                  'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
                   week.isCurrent ? 'border-info/30 bg-info-bg/60' : 'bg-muted/40',
                 )}
               >
@@ -406,7 +408,6 @@ export default function DashboardPage({
                   key={`${a.itemId}-${a.rule}-${idx}`}
                   anomaly={a}
                   item={byId.get(a.itemId)}
-                  index={idx}
                   onOpen={openById}
                 />
               ))}
@@ -673,21 +674,21 @@ function Key({ swatch, label, n }: { swatch: string; label: string; n?: number }
 }
 
 function AnomalyRow({
-  anomaly, item, index, onOpen,
+  anomaly, item, onOpen,
 }: {
   anomaly: Anomaly;
   item: ProcurementItem | undefined;
-  index: number;
   onOpen: (id: string) => void;
 }) {
   const Icon = ANOMALY_ICON[anomaly.rule] ?? TriangleAlert;
   const crit = anomaly.severity === 'crit';
 
+  // The page transition already brings these in. A stagger on top of it drags
+  // the tail of the arrival out past half a second, which is felt long before
+  // it is seen.
   return (
     <Alert
-      style={{ animationDelay: `${index * 40}ms` }}
       className={cn(
-        'motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 motion-safe:fill-mode-backwards',
         crit
           ? 'border-late/20 bg-late-bg text-late-fg'
           : 'border-atrisk/25 bg-atrisk-bg text-atrisk-fg',

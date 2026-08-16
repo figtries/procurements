@@ -36,6 +36,9 @@ interface OverviewPageProps {
   uniqueDiscs: string[];
   uniqueVendors: string[];
   hasProject: boolean;
+  /** The row the detail screen was last opened from; it morphs into that
+   *  screen and back rather than fading with the rest of the page. */
+  morphItemId: string | null;
   onSearch: (v: string) => void;
   onFilterStatus: (v: string) => void;
   onFilterDisc: (v: string) => void;
@@ -153,7 +156,7 @@ function WarnBanners({
 export default function OverviewPage({
   projectItems, filteredItems, grouped, groupBy, search,
   filterStatus, filterDisc, filterVendor, hasFilters, uniqueDiscs, uniqueVendors,
-  hasProject, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
+  hasProject, morphItemId, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
   onClearFilters, onGroupBy, onImport, onExport, exporting, onAddItem, onOpenDetail,
 }: OverviewPageProps) {
   /** Filtering runs in a transition so the list crossfades instead of snapping. */
@@ -365,6 +368,7 @@ export default function OverviewPage({
                   key={group.key}
                   group={group}
                   groupBy={groupBy}
+                  morphItemId={morphItemId}
                   onOpenDetail={onOpenDetail}
                 />
               ))}

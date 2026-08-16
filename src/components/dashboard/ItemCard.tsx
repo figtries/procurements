@@ -1,3 +1,4 @@
+import { ViewTransition } from 'react';
 import {
   ChevronRight, CircleDashed, Clock, PackageCheck, TrendingUp, TriangleAlert,
   type LucideIcon,
@@ -14,16 +15,15 @@ import { cn } from '@/lib/utils';
 
 interface ItemCardProps {
   item: ProcurementItem;
-  /** Position in its group, used to stagger the entry animation. */
-  index?: number;
   /** The heading already names whatever the list is grouped on, so the row
    *  does not repeat it. */
   groupBy?: GroupBy;
+  /** This is the row the detail screen was opened from, so it is the row
+   *  that flies there and back rather than fading with the rest of the
+   *  page. Only ever true of one row at a time. */
+  morph?: boolean;
   onClick: () => void;
 }
-
-/** Cap the stagger so long lists do not crawl in. */
-const MAX_STAGGER = 8;
 
 /** One glyph per schedule state — the row reads before any of its text does. */
 const STATUS_ICON: Record<ItemStatus, LucideIcon> = {
@@ -34,20 +34,18 @@ const STATUS_ICON: Record<ItemStatus, LucideIcon> = {
   onsite:   PackageCheck,
 };
 
-export default function ItemCard({ item, index = 0, groupBy, onClick }: ItemCardProps) {
+export default function ItemCard({ item, groupBy, morph, onClick }: ItemCardProps) {
   const nextMile  = getNextMilestone(item);
   const status    = STATUS_CLASSES[item.status];
   const Icon      = STATUS_ICON[item.status];
 
-  return (
+  const row = (
     <Item
-      style={{ animationDelay: `${Math.min(index, MAX_STAGGER) * 30}ms` }}
       className={cn(
         'relative gap-x-3 rounded-none px-4 py-3 transition-colors hover:bg-muted/50',
         // Item ships with a transparent 1px border on all four sides; colouring
         // just the bottom edge turns it into the rule between rows for free.
         'border-b-border last:border-b-transparent',
-        'motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-backwards',
         'has-[button:focus-visible]:bg-muted/50 has-[button:focus-visible]:ring-3',
         'has-[button:focus-visible]:ring-ring/50 has-[button:focus-visible]:ring-inset',
       )}
@@ -118,4 +116,15 @@ export default function ItemCard({ item, index = 0, groupBy, onClick }: ItemCard
       </ItemFooter>
     </Item>
   );
+
+  // `default="none"` keeps the row still during the swaps it is not part of —
+  // a filter change, a regroup — where it would otherwise animate itself
+  // alongside the list it lives in.
+  return morph
+    ? (
+      <ViewTransition name={`item-${item.id}`} share="morph" default="none">
+        {row}
+      </ViewTransition>
+    )
+    : row;
 }

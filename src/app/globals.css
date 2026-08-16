@@ -407,27 +407,50 @@
    Page, list and tab swaps are driven by React's <ViewTransition>;
    these rules give the browser the actual animation to run.
 
-   Three things separate a clean swap from a smeared one:
+   Four things separate a clean swap from a heavy one:
 
    • The shell is not captured. Left named, the document root is snapped
      too, and the browser then stretches one picture of the entire app
      between two very different page heights — sidebar, header and all.
-   • The two snapshots never share the screen. The outgoing view is gone
+   • The opacities never share the screen. The outgoing view is gone
      before the incoming one starts, so you never read one page through
      the other, which is what left a ghost of the screen you just left.
-   • The group box does not animate. Pages differ wildly in height, and a
-     box that morphs between the two sizes squashes both snapshots on the
-     way; pinned to its final size, each keeps the shape it was taken in.
+   • The travel does overlap, and that is the whole trick. It starts with
+     the transition rather than with the fade, so by the time the new page
+     becomes visible it is already a third of the way through its glide
+     and only the gentle end of the curve is ever seen. Fading in an
+     element that begins its movement from a standstill is what reads as
+     weight; this reads as something that was already on its way.
+   • Nothing scales. A page snapshot is a bitmap a few thousand pixels
+     tall — resampling one softens every glyph on it for as long as the
+     animation runs, which is felt as blur rather than as depth.
    ═══════════════════════════════════════════════════════════ */
 
 /* Only the page area animates; everything around it stays live. */
 :root {
   view-transition-name: none;
+
+  /* One vocabulary for every swap. Two clocks on purpose: the fades hand
+     off in sequence, the travel runs long and straight through both. */
+  --vt-out: 110ms;
+  --vt-in: 200ms;
+  --vt-travel: 340ms;
+
+  /* How far the incoming page travels. Most of it is spent before the page
+     is visible at all, so this reads smaller than it measures. */
+  --vt-rise: 20px;
+
+  /* Slow in, slow out — the only curve here that is ever watched from
+     start to finish, so it gets the one that has no hard edges. */
+  --vt-glide: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 ::view-transition-group(app-page),
 ::view-transition-group(item-list),
 ::view-transition-group(lookahead) {
+  /* Pages differ wildly in height, and a box that morphs between the two
+     sizes squashes both snapshots on the way; pinned to its final size,
+     each keeps the shape it was taken in. */
   animation: none;
 }
 
@@ -447,46 +470,92 @@
 ::view-transition-old(lookahead),
 ::view-transition-new(lookahead) {
   mix-blend-mode: normal;
-  /* Grow and shrink from the top edge: a snapshot scaled about its centre
-     would drift up over the sticky header. */
-  transform-origin: 50% 0;
 }
 
-/* Page swap — the outgoing screen recedes, the incoming one rises. */
+/* Page swap — the outgoing screen steps aside quickly, the incoming one
+   glides the whole length of the transition. */
 ::view-transition-old(app-page) {
-  animation: vt-page-out 140ms cubic-bezier(0.32, 0, 0.67, 0) both;
+  animation:
+    var(--vt-out) ease-out both vt-fade-out,
+    var(--vt-out) ease-out both vt-depart;
 }
 ::view-transition-new(app-page) {
-  animation: vt-page-in 300ms cubic-bezier(0.16, 1, 0.3, 1) 140ms both;
+  animation:
+    var(--vt-in) ease-out var(--vt-out) both vt-fade-in,
+    var(--vt-travel) var(--vt-glide) both vt-arrive;
 }
 
-/* Lists and the lookahead grid swap in place — same hand-off, less travel. */
+/* Lists and the lookahead grid swap inside a page that is standing still,
+   so they travel less and finish sooner. */
 ::view-transition-old(item-list),
 ::view-transition-old(lookahead) {
-  animation: vt-swap-out 110ms cubic-bezier(0.32, 0, 0.67, 0) both;
+  animation: 90ms ease-out both vt-fade-out;
 }
 ::view-transition-new(item-list),
 ::view-transition-new(lookahead) {
-  animation: vt-swap-in 240ms cubic-bezier(0.16, 1, 0.3, 1) 110ms both;
+  animation:
+    170ms ease-out 90ms both vt-fade-in,
+    260ms var(--vt-glide) both vt-arrive-near;
 }
 
-@keyframes vt-page-out { to   { opacity: 0; transform: scale(0.985); } }
-@keyframes vt-page-in  { from { opacity: 0; transform: translateY(12px) scale(0.994); } }
-@keyframes vt-swap-out { to   { opacity: 0; transform: scale(0.99); } }
-@keyframes vt-swap-in  { from { opacity: 0; transform: translateY(6px); } }
+@keyframes vt-fade-out    { to   { opacity: 0; } }
+@keyframes vt-fade-in     { from { opacity: 0; } }
+@keyframes vt-depart      { to   { transform: translateY(calc(var(--vt-rise) * -0.4)); } }
+@keyframes vt-arrive      { from { transform: translateY(var(--vt-rise)); } }
+@keyframes vt-arrive-near { from { transform: translateY(10px); } }
+
+/* ── Shared element ──────────────────────────────────────────
+   An item row and the screen it opens are the same object, so the row
+   lifts out of the list and becomes the detail header rather than being
+   replaced by it. Both ends carry the same <ViewTransition name>, and
+   the element is lifted clear of the page snapshot on both sides — it
+   flies over the page it is leaving and lands in the hole waiting for it
+   on the page it is joining.
+
+   The blur across the middle is what makes this work: the two ends are a
+   thin row and a tall card, and interpolating one bitmap into the other
+   is a stretch. Out of focus, a stretch reads as depth of field. In
+   focus, it reads as a smear. */
+::view-transition-group(.morph) {
+  animation-duration: var(--vt-travel);
+  animation-timing-function: var(--vt-glide);
+  z-index: 2;
+}
+::view-transition-image-pair(.morph) {
+  isolation: auto;
+  animation: var(--vt-travel) ease-in-out both vt-morph-focus;
+}
+::view-transition-old(.morph),
+::view-transition-new(.morph) {
+  mix-blend-mode: normal;
+  animation-duration: var(--vt-travel);
+  animation-timing-function: ease-in-out;
+}
+@keyframes vt-morph-focus {
+  0%, 100% { filter: blur(0); }
+  40%      { filter: blur(4px); }
+}
 
 @media (prefers-reduced-motion: reduce) {
   /* Keep the hand-off — it is what says the screen changed — but drop the
      travel and most of the wait. */
   ::view-transition-old(*) {
-    animation-name: vt-reduced-out !important;
+    animation-name: vt-fade-out !important;
     animation-duration: 90ms !important;
     animation-delay: 0s !important;
   }
   ::view-transition-new(*) {
-    animation-name: vt-reduced-in !important;
+    animation-name: vt-fade-in !important;
     animation-duration: 110ms !important;
     animation-delay: 90ms !important;
+  }
+  /* A morph is travel by definition, so it does not survive this at all —
+     the row and the header simply cross-fade where they each already are. */
+  ::view-transition-group(.morph) {
+    animation: none !important;
+  }
+  ::view-transition-image-pair(.morph) {
+    animation: none !important;
   }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
@@ -495,6 +564,3 @@
     scroll-behavior: auto !important;
   }
 }
-
-@keyframes vt-reduced-out { to   { opacity: 0; } }
-@keyframes vt-reduced-in  { from { opacity: 0; } }

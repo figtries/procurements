@@ -18,6 +18,9 @@ const PAGE_SIZE = 5;
 interface GroupCardProps {
   group: { key: string; label: string; items: ProcurementItem[] };
   groupBy: GroupBy;
+  /** The row the detail screen was last opened from, wherever it happens to
+   *  sit — it is the one that morphs into that screen and back. */
+  morphItemId?: string | null;
   onOpenDetail: (item: ProcurementItem) => void;
 }
 
@@ -60,19 +63,20 @@ function Heading({ group, groupBy, children }: {
   );
 }
 
-function Rows({ items, groupBy, onOpenDetail }: {
+function Rows({ items, groupBy, morphItemId, onOpenDetail }: {
   items: ProcurementItem[];
   groupBy: GroupBy;
+  morphItemId?: string | null;
   onOpenDetail: (item: ProcurementItem) => void;
 }) {
   return (
     <ItemGroup className="gap-0 border-t">
-      {items.map((item, i) => (
+      {items.map(item => (
         <ItemCard
           key={item.id}
           item={item}
-          index={i}
           groupBy={groupBy}
+          morph={item.id === morphItemId}
           onClick={() => onOpenDetail(item)}
         />
       ))}
@@ -80,10 +84,18 @@ function Rows({ items, groupBy, onOpenDetail }: {
   );
 }
 
-export default function GroupCard({ group, groupBy, onOpenDetail }: GroupCardProps) {
+export default function GroupCard({ group, groupBy, morphItemId, onOpenDetail }: GroupCardProps) {
   const pages = paginate(group.items);
   const [api, setApi] = useState<CarouselApi>();
-  const [page, setPage] = useState(0);
+
+  /** Coming back from an item lands on the page that item is on.
+   *
+   *  Returning to page one would be wrong on its own terms — you asked to go
+   *  back, not to start over — and it also strands the row the detail screen
+   *  morphs back into somewhere off to the side, so the card flies out of
+   *  the card it lives in on its way to a row nobody can see. */
+  const startIndex = Math.max(0, pages.findIndex(p => p.some(i => i.id === morphItemId)));
+  const [page, setPage] = useState(startIndex);
 
   useEffect(() => {
     if (!api) return;
@@ -103,7 +115,12 @@ export default function GroupCard({ group, groupBy, onOpenDetail }: GroupCardPro
     return (
       <Card className="gap-0 py-0">
         <Heading group={group} groupBy={groupBy} />
-        <Rows items={group.items} groupBy={groupBy} onOpenDetail={onOpenDetail} />
+        <Rows
+          items={group.items}
+          groupBy={groupBy}
+          morphItemId={morphItemId}
+          onOpenDetail={onOpenDetail}
+        />
       </Card>
     );
   }
@@ -115,7 +132,7 @@ export default function GroupCard({ group, groupBy, onOpenDetail }: GroupCardPro
           in the heading while still reaching the carousel's context. */}
       <Carousel
         className="contents"
-        opts={{ align: 'start', watchDrag: true }}
+        opts={{ align: 'start', watchDrag: true, startIndex }}
         setApi={setApi}
       >
         <Heading group={group} groupBy={groupBy}>
@@ -130,7 +147,12 @@ export default function GroupCard({ group, groupBy, onOpenDetail }: GroupCardPro
         <CarouselContent className="ml-0">
           {pages.map((pageItems, p) => (
             <CarouselItem key={p} className="pl-0">
-              <Rows items={pageItems} groupBy={groupBy} onOpenDetail={onOpenDetail} />
+              <Rows
+                items={pageItems}
+                groupBy={groupBy}
+                morphItemId={morphItemId}
+                onOpenDetail={onOpenDetail}
+              />
             </CarouselItem>
           ))}
         </CarouselContent>

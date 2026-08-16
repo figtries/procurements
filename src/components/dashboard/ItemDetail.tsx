@@ -1,5 +1,6 @@
 'use client';
 
+import { ViewTransition } from 'react';
 import { ArrowLeft, Clock, Package, Pencil, Trash2, TriangleAlert } from 'lucide-react';
 import type { ProcurementItem } from '@/types';
 import { fmtDate } from '@/lib/procurement';
@@ -15,6 +16,11 @@ import { cn } from '@/lib/utils';
 
 interface ItemDetailProps {
   item: ProcurementItem;
+  /** True when this screen was opened from its row in the overview list, and
+   *  that row is therefore still on screen to fly from. Deleting the item, or
+   *  arriving here any other way, leaves nothing to morph and the card enters
+   *  with the page instead. */
+  morph?: boolean;
   onBack: () => void;
   onEdit: (item: ProcurementItem) => void;
   onDelete: (item: ProcurementItem) => void;
@@ -34,6 +40,29 @@ const READINESS_TONES = {
   mid:  { value: 'text-atrisk-fg',  rail: 'bg-atrisk' },
   full: { value: 'text-ok-fg',      rail: 'bg-ok' },
 } as const;
+
+/**
+ * Gives its child a shared identity when there is a row waiting on the other
+ * side, and stays out of the way when there is not.
+ *
+ * Naming it unconditionally would be worse than not naming it at all: a named
+ * element is lifted out of the page snapshot whether or not anything matches
+ * it, so on a screen reached with no row to fly from the card would simply be
+ * missing from the page as it fades in.
+ */
+function Morph({ on, name, children }: {
+  on?: boolean;
+  name: string;
+  children: React.ReactNode;
+}) {
+  if (!on) return children;
+  // `default="none"` keeps it still during transitions it is not part of.
+  return (
+    <ViewTransition name={name} share="morph" default="none">
+      {children}
+    </ViewTransition>
+  );
+}
 
 /** A headline figure over its own rail — used for progress and readiness. */
 function Meter({
@@ -65,7 +94,7 @@ function Meter({
   );
 }
 
-export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetailProps) {
+export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: ItemDetailProps) {
   const isLate   = item.status === 'late';
   const isAtRisk = item.status === 'atrisk';
 
@@ -114,81 +143,86 @@ export default function ItemDetail({ item, onBack, onEdit, onDelete }: ItemDetai
         </Alert>
       )}
 
-      {/* ── Identity, progress and specification ── */}
-      <Card className="gap-0 py-0">
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
-          <div className="min-w-0 space-y-2.5">
-            {/* Discipline leads, status follows — what the item *is* before how
-                it is doing. The title carries the description on its own. */}
-            <div className="flex flex-wrap items-center gap-2">
-              <DisciplineBadge discipline={item.discipline} />
-              <StatusBadge status={item.status} />
+      {/* ── Identity, progress and specification ──
+          This card is the other end of the row that was clicked: same name,
+          so the browser carries one between the two instead of dissolving
+          one and building the other. */}
+      <Morph on={morph} name={`item-${item.id}`}>
+        <Card className="gap-0 py-0">
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+            <div className="min-w-0 space-y-2.5">
+              {/* Discipline leads, status follows — what the item *is* before how
+                  it is doing. The title carries the description on its own. */}
+              <div className="flex flex-wrap items-center gap-2">
+                <DisciplineBadge discipline={item.discipline} />
+                <StatusBadge status={item.status} />
+              </div>
+              <h1 className="font-heading text-xl leading-tight font-semibold tracking-tight text-balance sm:text-2xl">
+                {item.desc}
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                {item.vendor || 'Vendor not set'} · PO {item.poNo || '—'}
+              </p>
             </div>
-            <h1 className="font-heading text-xl leading-tight font-semibold tracking-tight text-balance sm:text-2xl">
-              {item.desc}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {item.vendor || 'Vendor not set'} · PO {item.poNo || '—'}
-            </p>
+
+            {/* Side by side and full width on a phone, so neither action ends up
+                as a lone stub on its own line — but with air between them, the
+                way the toolbar on the overview reads. */}
+            <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:gap-2.5">
+              <Button
+                variant="outline" size="lg"
+                className="flex-1 sm:flex-none"
+                onClick={() => onEdit(item)}
+              >
+                <Pencil />
+                Edit
+              </Button>
+              <Button
+                variant="outline" size="lg"
+                className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-none"
+                onClick={() => onDelete(item)}
+              >
+                <Trash2 />
+                Delete
+              </Button>
+            </div>
           </div>
 
-          {/* Side by side and full width on a phone, so neither action ends up
-              as a lone stub on its own line — but with air between them, the
-              way the toolbar on the overview reads. */}
-          <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:gap-2.5">
-            <Button
-              variant="outline" size="lg"
-              className="flex-1 sm:flex-none"
-              onClick={() => onEdit(item)}
-            >
-              <Pencil />
-              Edit
-            </Button>
-            <Button
-              variant="outline" size="lg"
-              className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-none"
-              onClick={() => onDelete(item)}
-            >
-              <Trash2 />
-              Delete
-            </Button>
+          <div className="grid gap-5 border-t p-4 sm:grid-cols-2 sm:gap-6 sm:p-5">
+            <Meter
+              label="Overall Progress"
+              caption="Based on completed milestones"
+              pct={item.progress}
+            />
+            <Meter
+              label="Document Readiness"
+              caption="Vendor document completeness"
+              pct={readinessPct}
+              valueClassName={readinessTone.value}
+              railClassName={readinessTone.rail}
+            />
           </div>
-        </div>
 
-        <div className="grid gap-5 border-t p-4 sm:grid-cols-2 sm:gap-6 sm:p-5">
-          <Meter
-            label="Overall Progress"
-            caption="Based on completed milestones"
-            pct={item.progress}
-          />
-          <Meter
-            label="Document Readiness"
-            caption="Vendor document completeness"
-            pct={readinessPct}
-            valueClassName={readinessTone.value}
-            railClassName={readinessTone.rail}
-          />
-        </div>
-
-        {/* A hairline grid keeps eight fields legible without eight boxes. */}
-        <dl className="grid grid-cols-2 gap-px border-t bg-border md:grid-cols-4">
-          {fields.map(f => (
-            <div key={f.label} className="min-w-0 bg-card px-4 py-3 sm:px-5">
-              <dt className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                {f.label}
-              </dt>
-              {/* DO numbers and contract references run long and have no spaces
-                  to break on — let them wrap mid-token. */}
-              <dd className={cn(
-                'mt-1 text-sm font-medium break-words',
-                !f.value && 'text-muted-foreground',
-              )}>
-                {f.value || '—'}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </Card>
+          {/* A hairline grid keeps eight fields legible without eight boxes. */}
+          <dl className="grid grid-cols-2 gap-px border-t bg-border md:grid-cols-4">
+            {fields.map(f => (
+              <div key={f.label} className="min-w-0 bg-card px-4 py-3 sm:px-5">
+                <dt className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                  {f.label}
+                </dt>
+                {/* DO numbers and contract references run long and have no spaces
+                    to break on — let them wrap mid-token. */}
+                <dd className={cn(
+                  'mt-1 text-sm font-medium break-words',
+                  !f.value && 'text-muted-foreground',
+                )}>
+                  {f.value || '—'}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      </Morph>
 
       {/* ── Schedule beside the paperwork ── */}
       <div className="grid items-start gap-4 lg:grid-cols-2">
