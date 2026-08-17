@@ -93,14 +93,16 @@ function ProjectsPage({
   return (
     <div className="space-y-5 sm:space-y-6">
       {/* ── Page header ── */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+      {/* Title left, action top-right — the same shape at every width. A
+          full-bleed button on phones read as a banner rather than an action. */}
+      <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <h1 className="font-heading text-2xl font-semibold tracking-tight sm:text-3xl">
             Projects
           </h1>
         </div>
 
-        <Button size="lg" className="shrink-0 max-sm:w-full" onClick={() => onFormOpenChange(true)}>
+        <Button size="lg" className="shrink-0" onClick={() => onFormOpenChange(true)}>
           <Plus />
           New project
         </Button>
