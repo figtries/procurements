@@ -90,6 +90,37 @@ function DialogContent({
   )
 }
 
+/** The scrolling middle of a tall dialog.
+ *
+ *  The sizing here is not a preference, it is the one arrangement WebKit gets
+ *  right. The panel is `h-fit` under a `max-h` cap, so its height is
+ *  indefinite — decided by content, merely limited from above. A `flex-1`
+ *  child (`flex: 1 1 0%`) asks to be sized from leftover space, and to work
+ *  out how much space there is, the browser must first resolve what the panel
+ *  wants to be; WebKit gives a zero-basis item no say in that answer, so the
+ *  panel measures itself as header plus footer and the body is squeezed out of
+ *  existence. iPhones showed the Add item dialog as a title sitting directly on
+ *  top of Save/Cancel. Blink resolves the same stylesheet correctly, which is
+ *  why Android never showed it.
+ *
+ *  `flex-auto` (`flex: 1 1 auto`) bases the body on its own content, so the
+ *  panel measures itself honestly, `max-h` clips it, and `min-h-0` lets it
+ *  shrink to the cap and scroll. Same result everywhere, no zero-height cliff.
+ *
+ *  Padding is left to the caller — the forms space themselves differently. */
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      data-slot="dialog-body"
+      className={cn(
+        "min-h-0 flex-auto overflow-y-auto overscroll-contain",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
@@ -161,6 +192,7 @@ function DialogDescription({
 
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,

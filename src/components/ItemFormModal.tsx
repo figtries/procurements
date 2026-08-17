@@ -5,7 +5,7 @@ import type { ProcurementItem } from '@/types';
 import { DISCIPLINES, getDisciplineStyle } from '@/lib/procurement';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -166,7 +166,7 @@ export default function ItemFormModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4">
+        <DialogBody className="space-y-5 p-4">
           {/* ── Equipment ── */}
           <SectionLabel>Equipment</SectionLabel>
 
@@ -335,7 +335,7 @@ export default function ItemFormModal({
               />
             </div>
           ))}
-        </div>
+        </DialogBody>
 
         <DialogFooter className="m-0 shrink-0 rounded-none">
           <Button variant="outline" onClick={onClose}>Cancel</Button>

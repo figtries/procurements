@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -96,7 +96,7 @@ export default function ImportModal({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
+        <DialogBody className="p-4">
           {/* ── Drop zone ── */}
           {!result && !reading && (
             <button
@@ -322,7 +322,7 @@ export default function ImportModal({
               </div>
             </>
           )}
-        </div>
+        </DialogBody>
 
         <DialogFooter className="m-0 shrink-0 rounded-none">
           <Button variant="outline" onClick={close}>Cancel</Button>

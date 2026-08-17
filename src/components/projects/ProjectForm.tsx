@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogBody, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -72,7 +72,7 @@ export default function ProjectForm({ open, onOpenChange, onSubmit }: ProjectFor
         showCloseButton={false}
       >
         <form
-          className="flex min-h-0 flex-1 flex-col"
+          className="flex min-h-0 flex-auto flex-col"
           onSubmit={e => { e.preventDefault(); onSubmit(values); }}
         >
           <DialogHeader className="shrink-0 px-5 pt-5 pb-4">
@@ -84,7 +84,7 @@ export default function ProjectForm({ open, onOpenChange, onSubmit }: ProjectFor
           {/* The rows answer to the width of this box, not of the window: the
               same form is a full-bleed sheet on a phone and a 36rem card on a
               desktop, and only its own measure knows which pairings fit. */}
-          <div className="@container min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 pb-5">
+          <DialogBody className="@container space-y-4 px-5 pb-5">
             <div className="grid gap-2">
               <Label htmlFor="pf-name">Project name</Label>
               {/* No autofocus. On a phone it throws the keyboard up before the
@@ -149,7 +149,7 @@ export default function ProjectForm({ open, onOpenChange, onSubmit }: ProjectFor
                 />
               </div>
             </div>
-          </div>
+          </DialogBody>
 
           {/* One full-width bar cut in half, so the two answers to this form
               carry the same weight and reach the same edges as the fields.
