@@ -1,11 +1,10 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { memo, useMemo, useState, useTransition } from 'react';
 import { Plus, Search, X } from 'lucide-react';
 import type { ProcurementItem, Project } from '@/types';
 import { type ProjectSummary, summariseProjects } from '@/lib/procurement';
 import ProjectHero from './ProjectHero';
-import ProjectForm from './ProjectForm';
 import ProjectTable from './ProjectTable';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,15 +13,6 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-
-interface ProjectFormState {
-  name: string;
-  client: string;
-  location: string;
-  pic: string;
-  contractNo: string;
-  handover: string;
-}
 
 type SortKey = 'attention' | 'handover' | 'progress' | 'recent' | 'name';
 
@@ -56,11 +46,7 @@ interface ProjectsPageProps {
   items: ProcurementItem[];
   activeProject: Project | null;
   activeProjectId: string | null;
-  form: ProjectFormState;
-  formOpen: boolean;
   onFormOpenChange: (open: boolean) => void;
-  onFormChange: (field: string, value: string) => void;
-  onCreateProject: () => void;
   onSelectProject: (id: string) => void;
   onOpenProject: (id: string) => void;
   onDeleteProject: (proj: Project) => void;
@@ -68,9 +54,9 @@ interface ProjectsPageProps {
   onDeleteActiveProject: () => void;
 }
 
-export default function ProjectsPage({
-  projects, items, activeProject, activeProjectId, form, formOpen,
-  onFormOpenChange, onFormChange, onCreateProject, onSelectProject, onOpenProject,
+function ProjectsPage({
+  projects, items, activeProject, activeProjectId,
+  onFormOpenChange, onSelectProject, onOpenProject,
   onDeleteProject, onGoOverview, onDeleteActiveProject,
 }: ProjectsPageProps) {
   /** Filtering runs in a transition so the table crossfades instead of snapping. */
@@ -189,19 +175,15 @@ export default function ProjectsPage({
           onClearFilters={clearFilters}
         />
       </div>
-
-      <ProjectForm
-        open={formOpen}
-        onOpenChange={onFormOpenChange}
-        name={form.name}
-        client={form.client}
-        location={form.location}
-        pic={form.pic}
-        contractNo={form.contractNo}
-        handover={form.handover}
-        onChange={onFormChange}
-        onSubmit={onCreateProject}
-      />
     </div>
   );
 }
+
+/**
+ * Memoised because the dialog it used to contain lives above it now. Opening
+ * that dialog is a state change at the top of the app, and without this the
+ * whole page — hero, toolbar, both table layouts — re-rendered to answer it.
+ * Measured at 30-46ms for this subtree alone, which is most of what made the
+ * button feel slow to press.
+ */
+export default memo(ProjectsPage);

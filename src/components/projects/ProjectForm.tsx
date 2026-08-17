@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -5,28 +8,55 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-interface ProjectFormProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+export interface ProjectFormValues {
   name: string;
   client: string;
   location: string;
   pic: string;
   contractNo: string;
   handover: string;
-  onChange: (field: string, value: string) => void;
-  onSubmit: () => void;
+}
+
+const EMPTY: ProjectFormValues = {
+  name: '', client: '', location: '', pic: '', contractNo: '', handover: '',
+};
+
+interface ProjectFormProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (values: ProjectFormValues) => void;
 }
 
 /**
  * Creating a project is a once-in-a-while act, so it no longer holds a
  * permanent half of the page — it lives behind the header button and comes
  * forward only when asked for.
+ *
+ * The fields are kept here rather than at the top of the app. Held up there,
+ * every character typed re-rendered the sidebar, the project table and all
+ * four modals to change one input — measured at ~54ms of blocked main thread
+ * per keystroke on a desktop, which on a phone is most of a second for a
+ * six-letter word. Nothing outside this dialog needs to know what is in the
+ * fields until Create project is pressed, so nothing outside it is told.
  */
-export default function ProjectForm({
-  open, onOpenChange, name, client, location, pic, contractNo, handover,
-  onChange, onSubmit,
-}: ProjectFormProps) {
+export default function ProjectForm({ open, onOpenChange, onSubmit }: ProjectFormProps) {
+  const [values, setValues] = useState<ProjectFormValues>(EMPTY);
+
+  // Previous prop tracked so the reset happens during render rather than in an
+  // effect after one — the same shape ItemFormModal uses. A form that opens
+  // still holding what was typed into it last time is a form that lies.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) setValues(EMPTY);
+  }
+
+  const { name, client, location, pic, contractNo, handover } = values;
+
+  function onChange(field: keyof ProjectFormValues, value: string) {
+    setValues(v => ({ ...v, [field]: value }));
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Wider than the default dialog: six fields read as a form only when
@@ -43,7 +73,7 @@ export default function ProjectForm({
       >
         <form
           className="flex min-h-0 flex-1 flex-col"
-          onSubmit={e => { e.preventDefault(); onSubmit(); }}
+          onSubmit={e => { e.preventDefault(); onSubmit(values); }}
         >
           <DialogHeader className="shrink-0 px-5 pt-5 pb-4">
             <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">

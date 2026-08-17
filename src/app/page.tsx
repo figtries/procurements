@@ -1,6 +1,6 @@
 'use client';
 
-import { ViewTransition, useEffect, useState, useTransition } from 'react';
+import { ViewTransition, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { toast } from 'sonner';
 import { DUMMY_PROJECT, DUMMY_ITEMS } from '@/lib/dummyData';
 
@@ -13,6 +13,7 @@ import DashboardPage from '@/components/dashboard/DashboardPage';
 import OverviewPage from '@/components/dashboard/OverviewPage';
 import ItemDetail from '@/components/dashboard/ItemDetail';
 import ProjectsPage from '@/components/projects/ProjectsPage';
+import ProjectForm, { type ProjectFormValues } from '@/components/projects/ProjectForm';
 import ProjectCommand from '@/components/ProjectCommand';
 import {
   SidebarInset, SidebarProvider, SidebarTrigger,
@@ -102,10 +103,9 @@ export default function ProcurementApp() {
     type: 'item' | 'project'; id: string; name: string;
   } | null>(null);
 
-  /* ── Project create form ── */
-  const [pfForm, setPfForm] = useState({
-    name: '', client: '', location: '', pic: '', contractNo: '', handover: '',
-  });
+  /* ── Project create form ──
+     Only whether it is open. What is typed into it lives inside the dialog,
+     and arrives here once, on submit. */
   const [pfOpen, setPfOpen] = useState(false);
 
   /* ── Project quick-switch palette (⌘K) ── */
@@ -118,10 +118,22 @@ export default function ProcurementApp() {
     setIsMounted(true);
   }, []);
 
-  /* ── Derived ── */
-  const activeProject = projects.find(p => p.id === activeProjectId) ?? null;
-  const projectItems  = activeProject ? items.filter(i => i.projectId === activeProject.id) : items;
-  const attention     = projectItems.filter(i => i.status === 'late' || i.status === 'atrisk').length;
+  /* ── Derived ──
+     Memoised for identity as much as for the arithmetic: these arrays are
+     props on memoised children, and a fresh array on every render would defeat
+     the memo before the numbers in it had even been looked at. */
+  const activeProject = useMemo(
+    () => projects.find(p => p.id === activeProjectId) ?? null,
+    [projects, activeProjectId],
+  );
+  const projectItems = useMemo(
+    () => (activeProject ? items.filter(i => i.projectId === activeProject.id) : items),
+    [items, activeProject],
+  );
+  const attention = useMemo(
+    () => projectItems.filter(i => i.status === 'late' || i.status === 'atrisk').length,
+    [projectItems],
+  );
 
   /* ─── Navigation ─── */
 
@@ -141,37 +153,39 @@ export default function ProcurementApp() {
    *  begun rendering the page being asked for. Which way a swap is going is
    *  already said by the row that flies between the list and the item it
    *  opens; it was not worth buying twice. */
-  function startPageSwap(update: () => void) {
+  const startPageSwap = useCallback((update: () => void) => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     startNav(update);
-  }
+  }, [startNav]);
 
-  function nav(p: PageName) {
+  const nav = useCallback((p: PageName) => {
     // Leaving the list-and-detail pair behind: nothing left to fly between,
     // and a name with only one end to it animates on its own.
     if (p !== 'overview' && p !== 'itemDetail') setMorphItemId(null);
     startPageSwap(() => setPage(p));
-  }
+  }, [startPageSwap]);
 
-  function openDetail(item: ProcurementItem) {
+  const openDetail = useCallback((item: ProcurementItem) => {
     setMorphItemId(item.id);
     startPageSwap(() => {
       setDetailItem(item);
       setPage('itemDetail');
     });
-  }
+  }, [startPageSwap]);
+
+  const goOverview = useCallback(() => nav('overview'), [nav]);
 
   /* ─── Project CRUD ─── */
-  function handleCreateProject() {
-    if (!pfForm.name.trim()) { toast.error('Project name is required'); return; }
+  function handleCreateProject(values: ProjectFormValues) {
+    if (!values.name.trim()) { toast.error('Project name is required'); return; }
     const proj: Project = {
       id: genId(),
-      name: pfForm.name.trim(),
-      client: pfForm.client.trim(),
-      location: pfForm.location.trim(),
-      pic: pfForm.pic.trim(),
-      contractNo: pfForm.contractNo.trim(),
-      handover: pfForm.handover,
+      name: values.name.trim(),
+      client: values.client.trim(),
+      location: values.location.trim(),
+      pic: values.pic.trim(),
+      contractNo: values.contractNo.trim(),
+      handover: values.handover,
       createdAt: new Date().toISOString(),
     };
     const updated = [...projects, proj];
@@ -179,20 +193,28 @@ export default function ProcurementApp() {
     saveProjects(updated);
     setActiveProjectId(proj.id);
     saveActiveProject(proj.id);
-    setPfForm({ name: '', client: '', location: '', pic: '', contractNo: '', handover: '' });
     setPfOpen(false);
     toast.success(`Project “${proj.name}” created.`);
   }
 
-  function handleSelectProject(id: string) {
+  const handleSelectProject = useCallback((id: string) => {
     setActiveProjectId(id);
     saveActiveProject(id);
-  }
+  }, []);
 
-  function confirmDeleteProject(proj: Project) {
+  const confirmDeleteProject = useCallback((proj: Project) => {
     setDeleteTarget({ type: 'project', id: proj.id, name: proj.name });
     setDeleteOpen(true);
-  }
+  }, []);
+
+  const openProject = useCallback((id: string) => {
+    handleSelectProject(id);
+    nav('overview');
+  }, [handleSelectProject, nav]);
+
+  const deleteActiveProject = useCallback(() => {
+    if (activeProject) confirmDeleteProject(activeProject);
+  }, [activeProject, confirmDeleteProject]);
 
   function doDeleteProject() {
     if (!deleteTarget || deleteTarget.type !== 'project') return;
@@ -447,16 +469,12 @@ export default function ProcurementApp() {
                   items={items}
                   activeProject={activeProject}
                   activeProjectId={activeProjectId}
-                  form={pfForm}
-                  formOpen={pfOpen}
                   onFormOpenChange={setPfOpen}
-                  onFormChange={(field, value) => setPfForm(f => ({ ...f, [field]: value }))}
-                  onCreateProject={handleCreateProject}
                   onSelectProject={handleSelectProject}
-                  onOpenProject={id => { handleSelectProject(id); nav('overview'); }}
+                  onOpenProject={openProject}
                   onDeleteProject={confirmDeleteProject}
-                  onGoOverview={() => nav('overview')}
-                  onDeleteActiveProject={() => activeProject && confirmDeleteProject(activeProject)}
+                  onGoOverview={goOverview}
+                  onDeleteActiveProject={deleteActiveProject}
                 />
               )}
 
@@ -504,6 +522,14 @@ export default function ProcurementApp() {
           </ViewTransition>
         </main>
       </SidebarInset>
+
+      {/* Up here with the other dialogs rather than inside the projects page,
+          so opening it is a change the page can sit out. */}
+      <ProjectForm
+        open={pfOpen}
+        onOpenChange={setPfOpen}
+        onSubmit={handleCreateProject}
+      />
 
       {/* Lives outside the page switch: the shortcut works from any screen. */}
       <ProjectCommand
