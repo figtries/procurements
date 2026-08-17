@@ -15,14 +15,12 @@ import {
 } from '@/components/ui/empty';
 import { Progress } from '@/components/ui/progress';
 import {
-  Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 
 interface ProjectTableProps {
   rows: ProjectSummary[];
-  /** Total before filtering, so the summary line can say what it is summing. */
-  totalCount: number;
   activeProjectId: string | null;
   /** True when the list is empty only because the toolbar is filtering it. */
   filtered: boolean;
@@ -110,7 +108,7 @@ function RowMenu({ project, isActive, onSelect, onOpen, onDelete }: {
 }
 
 export default function ProjectTable({
-  rows, totalCount, activeProjectId, filtered,
+  rows, activeProjectId, filtered,
   onSelect, onOpen, onDelete, onCreateProject, onClearFilters,
 }: ProjectTableProps) {
   if (rows.length === 0) {
@@ -144,15 +142,6 @@ export default function ProjectTable({
     );
   }
 
-  const totalItems = rows.reduce((s, r) => s + r.itemCount, 0);
-  // Weighted by item count: a 90% project holding four items should not pull
-  // the portfolio figure as hard as a 40% one holding eighty.
-  const weightedProgress = totalItems
-    ? Math.round(rows.reduce((s, r) => s + r.progress * r.itemCount, 0) / totalItems)
-    : 0;
-
-  const summary = `${rows.length} of ${totalCount} project${totalCount === 1 ? '' : 's'}`;
-
   return (
     // The card is a size container, so both layouts answer to the room the
     // card actually has rather than to the width of the window — the sidebar
@@ -162,6 +151,11 @@ export default function ProjectTable({
           A table narrower than about 42rem can only be read by dragging it
           sideways, which is no way to look at a list on a phone. The same
           fields stack instead, and nothing is left off. */}
+      {/* No rules between the rows on either layout. Every project already
+          ends in a progress bar, which closes its block far more quietly than
+          a line drawn across the card; with both, the card was mostly ruling.
+          What is left to separate rows is the space between them, so the rows
+          are given enough of it to do the job. */}
       <ul className="@2xl:hidden">
         {rows.map(({ project: p, itemCount, progress, health, daysToHandover }) => {
           const isActive = activeProjectId === p.id;
@@ -171,12 +165,12 @@ export default function ProjectTable({
             <li
               key={p.id}
               className={cn(
-                'relative cursor-pointer border-b transition-colors last:border-b-0 active:bg-muted/50',
+                'relative cursor-pointer transition-colors active:bg-muted/50',
                 isActive && ACTIVE_RAIL,
               )}
               onClick={() => onSelect(p.id)}
             >
-              <div className="flex items-start gap-2 px-4 pt-3 pb-2.5">
+              <div className="flex items-start gap-2 px-4 pt-4 pb-2.5">
                 <button
                   type="button"
                   className="min-w-0 flex-1 text-left outline-none focus-visible:underline focus-visible:underline-offset-4"
@@ -216,7 +210,7 @@ export default function ProjectTable({
 
               <Progress
                 value={progress}
-                className="px-4 pb-3"
+                className="px-4 pb-4"
                 trackClassName="h-1 bg-foreground/10"
                 indicatorClassName="transition-[width] duration-700"
               />
@@ -224,10 +218,11 @@ export default function ProjectTable({
           );
         })}
 
-        {/* No totals strip down here. On the table below, the same figures land
-            under the columns they are totalling; stacked, there are no columns
-            for them to land under, so the line read as a stray caption glued to
-            the bottom of the last project. */}
+        {/* The list ends with the last project, on both layouts. A totals row
+            used to close it off — a count of projects and the weighted
+            portfolio progress — but it answered a question this page is not
+            for. This page is for finding a project and opening it; how the
+            portfolio is doing is what the dashboard is. */}
       </ul>
 
       {/* ── Tablet and desktop: one row per project ──
@@ -265,7 +260,7 @@ export default function ProjectTable({
                 <TableRow
                   key={p.id}
                   data-state={isActive ? 'selected' : undefined}
-                  className="cursor-pointer data-[state=selected]:bg-transparent"
+                  className="cursor-pointer border-b-0 data-[state=selected]:bg-transparent"
                   onClick={() => onSelect(p.id)}
                 >
                   {/* The active project is marked by a rail and a chip, not by
@@ -356,30 +351,6 @@ export default function ProjectTable({
               );
             })}
           </TableBody>
-
-          {/* Worth a line of its own: the portfolio totals are the first thing
-              asked for in a progress meeting, and nobody should add them up by eye. */}
-          {rows.length > 1 && (
-            <TableFooter className="bg-transparent">
-              {/* Every column is written out rather than spanned: the middle
-                  ones drop away at narrow widths, and a colSpan would keep
-                  counting cells the row no longer has. */}
-              <TableRow className="hover:bg-transparent">
-                <TableCell className="py-2.5 text-xs font-normal text-muted-foreground">
-                  {summary}
-                </TableCell>
-                <TableCell className="hidden @2xl:table-cell" />
-                <TableCell className="hidden @6xl:table-cell" />
-                <TableCell className="hidden @5xl:table-cell" />
-                <TableCell className="hidden @4xl:table-cell" />
-                <TableCell className="py-2.5 text-right tabular">{totalItems}</TableCell>
-                {/* No label needed — the figure sits in the progress column,
-                    and a word floating beside it only cluttered the line. */}
-                <TableCell className="py-2.5 text-right tabular">{weightedProgress}%</TableCell>
-                <TableCell />
-              </TableRow>
-            </TableFooter>
-          )}
         </Table>
       </div>
     </Card>

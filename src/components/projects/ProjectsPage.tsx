@@ -180,7 +180,6 @@ export default function ProjectsPage({
 
         <ProjectTable
           rows={visible}
-          totalCount={projects.length}
           activeProjectId={activeProjectId}
           filtered={hasFilters}
           onSelect={onSelectProject}
