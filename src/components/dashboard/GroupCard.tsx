@@ -126,7 +126,11 @@ export default function GroupCard({ group, groupBy, morphItemId, onOpenDetail }:
   }
 
   return (
-    <Card className="gap-0 py-0">
+    // `display: contents` leaves the carousel's own element without a box, so
+    // the touch-action that keeps embla's non-passive listener off the
+    // scrolling thread has nowhere to sit but the card around it. It has to
+    // cover the heading too: a drag that starts there is still a drag.
+    <Card className="gap-0 py-0 [touch-action:pan-y_pinch-zoom]">
       {/* The carousel takes no box of its own — `contents` lets the heading and
           the pages stay direct children of the card, so the arrows can sit up
           in the heading while still reaching the carousel's context. */}

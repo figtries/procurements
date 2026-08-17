@@ -609,7 +609,10 @@ function DisciplineCard({ disciplines }: { disciplines: DisciplineBreakdown[] })
   }
 
   return (
-    <Card>
+    // The carousel's own element carries `display: contents` and so has no box
+    // to hold the touch-action that keeps embla's non-passive listener off the
+    // scrolling thread; the card around it does.
+    <Card className="[touch-action:pan-y_pinch-zoom]">
       {/* The carousel takes no box of its own — `contents` keeps the heading and
           the pages as direct children of the card, so the arrows can sit in the
           heading and still reach the carousel's context. */}

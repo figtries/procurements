@@ -138,15 +138,58 @@ function Carousel({
 }
 
 function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
-  const { carouselRef, orientation } = useCarousel()
+  const { carouselRef, orientation, api } = useCarousel()
+  const containerRef = React.useRef<HTMLDivElement>(null)
+
+  // A drag is only cheap once the slides are rasterised. The container is
+  // promoted to its own layer for the length of the gesture and let go again
+  // when the carousel settles: a page carrying one carousel per group cannot
+  // afford to hold a layer open for every one of them at rest.
+  React.useEffect(() => {
+    if (!api) return
+    const el = containerRef.current
+    if (!el) return
+
+    const lift = () => {
+      el.style.willChange = "transform"
+    }
+    const drop = () => {
+      el.style.willChange = ""
+    }
+
+    // `select` covers the arrows, which move the carousel without a pointer
+    // ever going down on it.
+    api.on("pointerDown", lift)
+    api.on("select", lift)
+    api.on("settle", drop)
+    return () => {
+      api.off("pointerDown", lift)
+      api.off("select", lift)
+      api.off("settle", drop)
+      drop()
+    }
+  }, [api])
 
   return (
     <div
       ref={carouselRef}
-      className="overflow-hidden"
+      // Embla listens for `touchmove` non-passively, which on its own asks the
+      // browser to check with the main thread before it may scroll the page —
+      // the finger stalls for as long as React is busy elsewhere. Naming the
+      // axis the carousel does not handle hands that scroll straight back to
+      // the compositor, and embla steps aside on the uncancelable event it
+      // gets in return. `pinch-zoom` stays: this is a performance note to the
+      // browser, not a reason to take zooming away from anyone.
+      className={cn(
+        "overflow-hidden",
+        orientation === "horizontal"
+          ? "[touch-action:pan-y_pinch-zoom]"
+          : "[touch-action:pan-x_pinch-zoom]"
+      )}
       data-slot="carousel-content"
     >
       <div
+        ref={containerRef}
         className={cn(
           "flex",
           orientation === "horizontal" ? "-ml-4" : "-mt-4 flex-col",
