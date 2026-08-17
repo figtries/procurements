@@ -147,7 +147,7 @@ export default function ItemFormModal({
       {/* Flex column rather than the default grid, so the body takes whatever
           height is left after the header and footer instead of being told a
           magic number that only holds at one viewport size. */}
-      <DialogContent className="flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-2xl">
+      <DialogContent className="flex max-h-[85svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-2xl">
         <DialogHeader className="shrink-0 p-4 pb-3">
           <DialogTitle>
             {editingItem ? 'Edit Procurement Item' : 'Add Procurement Item'}

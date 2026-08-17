@@ -35,10 +35,10 @@ export default function ProjectForm({
           form is one more than the form needs. */}
       {/* Flex column rather than the default grid, and no padding of its own:
           the title and the buttons stay put while only the fields scroll, so
-          the phone sheet takes whatever height is left instead of a magic
-          number that leaves Create project below the bottom of the screen. */}
+          the card takes whatever height is left instead of a magic number that
+          leaves Create project below the bottom of the screen. */}
       <DialogContent
-        className="flex max-h-[92svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-xl"
+        className="flex max-h-[85svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-xl"
         showCloseButton={false}
       >
         <form
@@ -57,12 +57,15 @@ export default function ProjectForm({
           <div className="@container min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 pb-5">
             <div className="grid gap-2">
               <Label htmlFor="pf-name">Project name</Label>
+              {/* No autofocus. On a phone it throws the keyboard up before the
+                  dialog has finished arriving — the viewport resizes mid
+                  animation — and it decides for you which field you meant.
+                  Tapping the field you want is one tap either way. */}
               <Input
                 id="pf-name"
                 value={name}
                 onChange={e => onChange('name', e.target.value)}
                 placeholder="e.g. Pulau Gading BCS Phase 1"
-                autoFocus
               />
             </div>
 
