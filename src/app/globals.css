@@ -536,6 +536,42 @@
   40%      { filter: blur(4px); }
 }
 
+/* ── Paged list slides ───────────────────────────────────────
+   The pages of a group card ride a native scroll-snap track, so the swipe
+   itself is already the compositor's work. This gives that swipe depth
+   without taking any of it back: the page being left behind settles and
+   dims while the one arriving comes forward.
+
+   The timeline is the scroll position, not a clock, so the movement is the
+   finger's — it follows at whatever speed the hand chooses, turns around
+   mid-swipe if the hand does, and holds still when the hand stops. A
+   duration-based animation can only guess at that after the fact.
+
+   Behind @supports because a browser without scroll-driven animations must
+   not fall back to running these keyframes on a timer: it would play them
+   once at load and leave every page but one dimmed. Those browsers get the
+   plain snap, which is smooth already — the effect is a bonus, never the
+   thing holding the page together. */
+@supports (animation-timeline: view(inline)) {
+  @media (prefers-reduced-motion: no-preference) {
+    .slide-depth {
+      animation-name: slide-depth;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      /* No duration: on a view timeline `auto` spans the whole range. */
+      animation-timeline: view(inline);
+    }
+  }
+}
+
+/* A page sits at the midpoint while it holds the frame, so the resting
+   state is a plain untransformed page — full opacity, no scaling, text
+   rasterised as crisply as it was before any of this. */
+@keyframes slide-depth {
+  0%, 100% { opacity: 0.45; transform: scale(0.96); }
+  50%      { opacity: 1;    transform: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Keep the hand-off — it is what says the screen changed — but drop the
      travel and most of the wait. */

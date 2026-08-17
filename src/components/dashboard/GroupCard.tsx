@@ -226,7 +226,7 @@ function Pager({ pages, group, groupBy, morphItemId, onOpenDetail }: {
             key={p}
             role="group"
             aria-roledescription="slide"
-            className="min-w-0 shrink-0 grow-0 basis-full snap-start snap-always"
+            className="slide-depth min-w-0 shrink-0 grow-0 basis-full snap-start snap-always"
           >
             <Rows
               items={pageItems}
