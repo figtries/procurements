@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ProcurementItem } from '@/types';
 import { DISCIPLINES, getDisciplineStyle } from '@/lib/procurement';
 import { Button } from '@/components/ui/button';
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -142,19 +142,28 @@ export default function ItemFormModal({
 
   const handleSave = () => { if (validate()) onSave(form); };
 
+  const panelRef = useRef<HTMLDivElement>(null);
+
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
       {/* Flex column rather than the default grid, so the body takes whatever
           height is left after the header and footer instead of being told a
           magic number that only holds at one viewport size. */}
-      <DialogContent className="flex max-h-[85svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-2xl">
+      <DialogContent
+        ref={panelRef}
+        // Base UI only skips the first field when it can see the dialog was
+        // opened by touch, and it cannot here — `open` is controlled, there is
+        // no Trigger to read the pointer type from. So it focuses Description
+        // and the phone throws up the keyboard over half the form before
+        // anyone has tapped anything. Focus the panel instead: still trapped,
+        // no keyboard until the user picks a field.
+        initialFocus={panelRef}
+        className="flex max-h-[85svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-2xl"
+      >
         <DialogHeader className="shrink-0 p-4 pb-3">
           <DialogTitle>
             {editingItem ? 'Edit Procurement Item' : 'Add Procurement Item'}
           </DialogTitle>
-          <DialogDescription>
-            Fill in what you know — the rest can follow later.
-          </DialogDescription>
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto overscroll-contain p-4">
