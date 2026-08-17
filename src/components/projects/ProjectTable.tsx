@@ -224,12 +224,10 @@ export default function ProjectTable({
           );
         })}
 
-        {rows.length > 1 && (
-          <li className="flex items-center justify-between border-t px-4 py-2.5 text-xs text-muted-foreground">
-            <span>{summary}</span>
-            <span className="tabular">{totalItems} items · {weightedProgress}%</span>
-          </li>
-        )}
+        {/* No totals strip down here. On the table below, the same figures land
+            under the columns they are totalling; stacked, there are no columns
+            for them to land under, so the line read as a stray caption glued to
+            the bottom of the last project. */}
       </ul>
 
       {/* ── Tablet and desktop: one row per project ──
