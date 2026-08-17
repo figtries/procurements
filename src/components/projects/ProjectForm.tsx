@@ -87,10 +87,8 @@ export default function ProjectForm({ open, onOpenChange, onSubmit }: ProjectFor
           <DialogBody className="@container space-y-4 px-5 pb-5">
             <div className="grid gap-2">
               <Label htmlFor="pf-name">Project name</Label>
-              {/* No autofocus. On a phone it throws the keyboard up before the
-                  dialog has finished arriving — the viewport resizes mid
-                  animation — and it decides for you which field you meant.
-                  Tapping the field you want is one tap either way. */}
+              {/* No autofocus, and DialogContent parks the initial focus on the
+                  panel, so the keyboard waits until a field is tapped. */}
               <Input
                 id="pf-name"
                 value={name}

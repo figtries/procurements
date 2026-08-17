@@ -47,15 +47,39 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  initialFocus,
+  ref,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
 }) {
+  // Base UI already declines to focus a field when it can see the dialog was
+  // opened by touch — but it reads the pointer type off a Trigger, and every
+  // dialog here is opened from controlled state instead, so it never sees one.
+  // Left alone it focuses the first field, and a phone answers that by throwing
+  // the keyboard up over half the form before anyone has tapped anything.
+  //
+  // Focusing the panel is what Base UI itself does on touch: focus is still
+  // trapped, the dialog is still announced, and the keyboard waits to be asked
+  // for. On a desktop it costs one Tab to reach the first field, which is the
+  // same key you would have pressed to leave it.
+  const popupRef = React.useRef<HTMLDivElement | null>(null)
+  const setPopup = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      popupRef.current = node
+      if (typeof ref === "function") ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref]
+  )
+
   return (
     <DialogPortal>
       <DialogOverlay />
       <DialogPrimitive.Popup
         data-slot="dialog-content"
+        ref={setPopup}
+        initialFocus={initialFocus ?? popupRef}
         className={cn(
           "fixed z-50 grid gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none",
           // One centred card at every width: a phone gets the same dialog as a
