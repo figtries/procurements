@@ -150,7 +150,19 @@ export default function GroupCard({ group, groupBy, morphItemId, onOpenDetail }:
         </Heading>
         <CarouselContent className="ml-0">
           {pages.map((pageItems, p) => (
-            <CarouselItem key={p} className="pl-0">
+            // The overview stacks one of these carousels per discipline, and
+            // each page is five fully-drawn rows. When a swipe lifts the track
+            // to its own layer, the browser would otherwise repaint every page
+            // in the group into it at once — the hitch you feel as the drag
+            // starts. `content-visibility` lets the pages that are off to the
+            // side skip drawing until they are swiped in; the reserved size
+            // keeps the card from resizing under the snap. The page the swipe
+            // is on, and the one it morphs back to, are always the visible one,
+            // so nothing that has to animate is ever the thing being skipped.
+            <CarouselItem
+              key={p}
+              className="pl-0 [content-visibility:auto] [contain-intrinsic-size:auto_20rem]"
+            >
               <Rows
                 items={pageItems}
                 groupBy={groupBy}

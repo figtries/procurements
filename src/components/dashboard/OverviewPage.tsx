@@ -21,7 +21,6 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface OverviewPageProps {
   projectItems: ProcurementItem[];
@@ -44,7 +43,6 @@ interface OverviewPageProps {
   onFilterDisc: (v: string) => void;
   onFilterVendor: (v: string) => void;
   onClearFilters: () => void;
-  onGroupBy: (g: GroupBy) => void;
   onImport: () => void;
   onExport: () => void;
   exporting: boolean;
@@ -157,7 +155,7 @@ export default function OverviewPage({
   projectItems, filteredItems, grouped, groupBy, search,
   filterStatus, filterDisc, filterVendor, hasFilters, uniqueDiscs, uniqueVendors,
   hasProject, morphItemId, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
-  onClearFilters, onGroupBy, onImport, onExport, exporting, onAddItem, onOpenDetail,
+  onClearFilters, onImport, onExport, exporting, onAddItem, onOpenDetail,
 }: OverviewPageProps) {
   /** Filtering runs in a transition so the list crossfades instead of snapping. */
   const [, startFilter] = useTransition();
@@ -270,8 +268,7 @@ export default function OverviewPage({
         {/* A two-column grid on a phone, so the short filters share a row on an
             exact half rather than a hand-computed width, and the long vendor
             list takes the row below. From sm up the same children flow as one
-            row, where every control stands 8 units tall and therefore lines up
-            with the group-by tabs at the far end. */}
+            row, where every control stands 8 units tall. */}
         <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap">
           <FilterSelect
             items={statusItems}
@@ -305,23 +302,6 @@ export default function OverviewPage({
               Clear
             </Button>
           )}
-
-          <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:ml-auto">
-            <span className="hidden text-xs font-medium text-muted-foreground sm:inline">
-              Group by
-            </span>
-            <Tabs
-              className="max-sm:w-full"
-              value={groupBy}
-              onValueChange={v => startFilter(() => onGroupBy(v as GroupBy))}
-            >
-              <TabsList className="max-sm:w-full">
-                <TabsTrigger value="discipline">Discipline</TabsTrigger>
-                <TabsTrigger value="status">Status</TabsTrigger>
-                <TabsTrigger value="vendor">Vendor</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
         </div>
       </div>
 

@@ -76,7 +76,7 @@ export default function ProcurementApp() {
   const [filterStatus, setFilterStatus] = useState('');
   const [filterDisc, setFilterDisc]     = useState('');
   const [filterVendor, setFilterVendor] = useState('');
-  const [groupBy, setGroupBy]           = useState<GroupBy>('discipline');
+  const groupBy: GroupBy = 'discipline';
 
   /* ── Item detail ── */
   const [detailItem, setDetailItem] = useState<ProcurementItem | null>(null);
@@ -499,7 +499,6 @@ export default function ProcurementApp() {
                   onClearFilters={() => {
                     setSearch(''); setFilterStatus(''); setFilterDisc(''); setFilterVendor('');
                   }}
-                  onGroupBy={setGroupBy}
                   onImport={() => setImportOpen(true)}
                   onExport={handleExport}
                   exporting={exporting}
