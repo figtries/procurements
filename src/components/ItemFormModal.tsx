@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { ProcurementItem } from '@/types';
-import { DISCIPLINES, getDisciplineStyle } from '@/lib/procurement';
+import { DISCIPLINES } from '@/lib/procurement';
 import { blockers, validateItem } from '@/lib/rules';
 import { Button } from '@/components/ui/button';
 import {
@@ -134,15 +134,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** The dot an option wears on the board, so the picker previews the row. */
-function DisciplineDot({ name }: { name: string }) {
-  return (
-    <span
-      className="size-1.5 shrink-0 rounded-full"
-      style={{ background: getDisciplineStyle(name).color }}
-    />
-  );
-}
 
 export default function ItemFormModal({
   open, editingItem, onClose, onSave,
@@ -251,13 +242,11 @@ export default function ItemFormModal({
                   className="w-full"
                   aria-invalid={!!errors.discipline}
                 >
-                  {form.discipline && <DisciplineDot name={form.discipline} />}
                   <SelectValue placeholder="Select discipline" />
                 </SelectTrigger>
                 <SelectContent>
                   {DISCIPLINES.map(d => (
                     <SelectItem key={d} value={d}>
-                      <DisciplineDot name={d} />
                       {d}
                     </SelectItem>
                   ))}

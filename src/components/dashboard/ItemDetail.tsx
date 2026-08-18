@@ -197,9 +197,6 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
               <h1 className="font-heading text-xl leading-tight font-semibold tracking-tight text-balance sm:text-2xl">
                 {item.desc}
               </h1>
-              <p className="text-sm text-muted-foreground">
-                {item.vendor || 'Vendor not set'} · PO {item.poNo || '—'}
-              </p>
             </div>
 
             {/* Side by side and full width on a phone, so neither action ends up
