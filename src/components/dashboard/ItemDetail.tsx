@@ -73,7 +73,8 @@ function Meter({
   label, caption, pct, valueClassName, railClassName,
 }: {
   label: string;
-  caption: string;
+  /** Left off where the figure and its label already say everything. */
+  caption?: string;
   pct: number;
   valueClassName?: string;
   railClassName?: string;
@@ -83,7 +84,7 @@ function Meter({
       <div className="mb-2.5 flex items-baseline justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium">{label}</p>
-          <p className="truncate text-xs text-muted-foreground">{caption}</p>
+          {caption && <p className="truncate text-xs text-muted-foreground">{caption}</p>}
         </div>
         <span className={cn('text-2xl font-semibold tracking-tight tabular', valueClassName)}>
           {pct}%
@@ -286,16 +287,6 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
             <div className="mb-4 rounded-xl bg-muted/40 p-3.5">
               <Meter
                 label="MFG — Manufacturing / Fabrication"
-                caption={
-                  item.mfg.plan
-                    ? `Plan ${Math.round(item.mfg.plan * 100)}%`
-                      + (mfgGap === 0
-                        ? ' · on plan'
-                        : mfgGap < 0
-                          ? ` · ${Math.abs(mfgGap)}% behind`
-                          : ` · ${mfgGap}% ahead`)
-                    : 'No plan set'
-                }
                 pct={Math.round(item.mfg.actual * 100)}
                 valueClassName={mfgGap < 0 ? 'text-atrisk-fg' : undefined}
                 railClassName={mfgGap < 0 ? 'bg-atrisk' : undefined}
