@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ProcurementItem } from '@/types';
 import { DISCIPLINES, getDisciplineStyle } from '@/lib/procurement';
+import { blockers, validateItem } from '@/lib/rules';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle,
@@ -21,6 +22,8 @@ export interface ItemFormState {
   qty: string;
   unit: string;
   vendor: string;
+  vendorPic: string;
+  vendorPhone: string;
   brand: string;
   delivery: string;
   poNo: string;
@@ -30,6 +33,10 @@ export interface ItemFormState {
   readinessDoc: string;
   doNo: string;
   termOfPayment: string;
+  /** Manufacturing, held as percentage strings (0–100) like readiness. */
+  mfgPlan: string;
+  mfgActual: string;
+  mfgNote: string;
   fatPlan: string; fatFc: string; fatAct: string; fatNote: string;
   rtsPlan: string; rtsFc: string; rtsAct: string; rtsNote: string;
   mosPlan: string; mosFc: string; mosAct: string; mosNote: string;
@@ -38,12 +45,46 @@ export interface ItemFormState {
 export function emptyFormState(): ItemFormState {
   return {
     desc: '', discipline: '', qty: '1', unit: '',
-    vendor: '', brand: '', delivery: '',
+    vendor: '', vendorPic: '', vendorPhone: '', brand: '', delivery: '',
     poNo: '', poDate: '', statusNote: '',
     readinessDoc: '0', doNo: '', termOfPayment: '',
+    mfgPlan: '0', mfgActual: '0', mfgNote: '',
     fatPlan: '', fatFc: '', fatAct: '', fatNote: '',
     rtsPlan: '', rtsFc: '', rtsAct: '', rtsNote: '',
     mosPlan: '', mosFc: '', mosAct: '', mosNote: '',
+  };
+}
+
+/** Which input a rule violation belongs under. */
+const RULE_FIELDS: Partial<Record<string, keyof ItemFormState>> = {
+  qty: 'qty',
+  doNo: 'doNo',
+  readinessDoc: 'readinessDoc',
+  'mfg.plan': 'mfgPlan',
+  'mfg.actual': 'mfgActual',
+  'fat.plan': 'fatPlan', 'fat.forecast': 'fatFc', 'fat.actual': 'fatAct',
+  'rts.plan': 'rtsPlan', 'rts.forecast': 'rtsFc', 'rts.actual': 'rtsAct',
+  'mos.plan': 'mosPlan', 'mos.forecast': 'mosFc', 'mos.actual': 'mosAct',
+};
+
+/** The shape the rule set checks, built from what is currently typed in. */
+function formToChecked(form: ItemFormState) {
+  const ms = (plan: string, forecast: string, actual: string) => ({
+    plan, forecast, actual, note: '',
+  });
+  return {
+    qty: Number(form.qty),
+    poDate: form.poDate,
+    readinessDoc: (Number(form.readinessDoc) || 0) / 100,
+    doNo: form.doNo,
+    mfg: {
+      plan: (Number(form.mfgPlan) || 0) / 100,
+      actual: (Number(form.mfgActual) || 0) / 100,
+      note: '',
+    },
+    fat: ms(form.fatPlan, form.fatFc, form.fatAct),
+    rts: ms(form.rtsPlan, form.rtsFc, form.rtsAct),
+    mos: ms(form.mosPlan, form.mosFc, form.mosAct),
   };
 }
 
@@ -51,10 +92,14 @@ export function itemToForm(item: ProcurementItem): ItemFormState {
   return {
     desc: item.desc, discipline: item.discipline,
     qty: String(item.qty), unit: item.unit,
-    vendor: item.vendor, brand: item.brand, delivery: item.delivery,
+    vendor: item.vendor, vendorPic: item.vendorPic, vendorPhone: item.vendorPhone,
+    brand: item.brand, delivery: item.delivery,
     poNo: item.poNo, poDate: item.poDate, statusNote: item.statusNote,
     readinessDoc: String(Math.round((item.readinessDoc || 0) * 100)),
     doNo: item.doNo, termOfPayment: item.termOfPayment,
+    mfgPlan: String(Math.round((item.mfg?.plan || 0) * 100)),
+    mfgActual: String(Math.round((item.mfg?.actual || 0) * 100)),
+    mfgNote: item.mfg?.note ?? '',
     fatPlan: item.fat.plan, fatFc: item.fat.forecast, fatAct: item.fat.actual, fatNote: item.fat.note,
     rtsPlan: item.rts.plan, rtsFc: item.rts.forecast, rtsAct: item.rts.actual, rtsNote: item.rts.note,
     mosPlan: item.mos.plan, mosFc: item.mos.forecast, mosAct: item.mos.actual, mosNote: item.mos.note,
@@ -105,7 +150,8 @@ export default function ItemFormModal({
   const [form, setForm] = useState<ItemFormState>(
     () => (editingItem ? itemToForm(editingItem) : emptyFormState()),
   );
-  const [errors, setErrors] = useState<Partial<Record<keyof ItemFormState, string>>>({});
+  /** Required fields that were empty on the last save attempt. */
+  const [missing, setMissing] = useState<Partial<Record<keyof ItemFormState, string>>>({});
 
   // Keep track of previous props to safely reset state during the render phase.
   const [prevOpen, setPrevOpen] = useState(open);
@@ -116,7 +162,7 @@ export default function ItemFormModal({
     setPrevEditingItem(editingItem);
     if (open) {
       setForm(editingItem ? itemToForm(editingItem) : emptyFormState());
-      setErrors({});
+      setMissing({});
     }
   }
 
@@ -124,23 +170,43 @@ export default function ItemFormModal({
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm(f => ({ ...f, [key]: e.target.value }));
 
+  /**
+   * The procedural rules — order of stages, dates that run forward — come from
+   * the shared rule set, so this form and a returned vendor form judge a record
+   * by exactly the same standard.
+   *
+   * Checked on every render rather than on save, so putting delivery before RTS
+   * is refused while it is being typed. Missing required fields stay on save:
+   * telling someone their description is empty before they have reached it is
+   * nagging, not discipline.
+   */
+  const ruleErrors: Partial<Record<keyof ItemFormState, string>> = {};
+  for (const violation of blockers(validateItem(formToChecked(form)))) {
+    const key = RULE_FIELDS[violation.field];
+    if (key && !ruleErrors[key]) ruleErrors[key] = violation.message;
+  }
+
+  const errors = { ...missing, ...ruleErrors };
+
   const validate = (): boolean => {
-    const errs: typeof errors = {};
+    const errs: typeof missing = {};
     if (!form.desc.trim())   errs.desc       = 'Description is required';
     if (!form.discipline)    errs.discipline = 'Pick a discipline';
     if (!form.vendor.trim()) errs.vendor     = 'Vendor is required';
     if (!form.poNo.trim())   errs.poNo       = 'PO number is required';
     if (!form.poDate)        errs.poDate     = 'PO date is required';
-    if (!form.qty || Number(form.qty) <= 0) errs.qty = 'Enter a valid quantity';
     const readiness = Number(form.readinessDoc);
     if (form.readinessDoc !== '' && (isNaN(readiness) || readiness < 0 || readiness > 100)) {
       errs.readinessDoc = 'Enter a value between 0 and 100';
     }
-    setErrors(errs);
-    return Object.keys(errs).length === 0;
+    setMissing(errs);
+    return Object.keys(errs).length === 0 && Object.keys(ruleErrors).length === 0;
   };
 
   const handleSave = () => { if (validate()) onSave(form); };
+
+  /** Everything standing between this form and a save, in one list. */
+  const problems = Object.values(errors).filter(Boolean) as string[];
 
   return (
     <Dialog open={open} onOpenChange={next => { if (!next) onClose(); }}>
@@ -231,6 +297,24 @@ export default function ItemFormModal({
             </div>
           </div>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="if-pic">PIC</Label>
+              <Input
+                id="if-pic" value={form.vendorPic} onChange={set('vendorPic')}
+                placeholder="e.g. Andi Pratama"
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="if-picno">PIC number</Label>
+              <Input
+                id="if-picno" type="tel" inputMode="tel"
+                value={form.vendorPhone} onChange={set('vendorPhone')}
+                placeholder="e.g. 0812-3456-7890"
+              />
+            </div>
+          </div>
+
           <div className="grid gap-2">
             <Label htmlFor="if-delivery">Delivery term</Label>
             <Input id="if-delivery" value={form.delivery} onChange={set('delivery')} placeholder="e.g. DDP SKN" />
@@ -295,6 +379,53 @@ export default function ItemFormModal({
             />
           </div>
 
+          {/* ── Manufacturing ──
+              Two percentages rather than dates: it is the one stage that runs
+              for months, so what matters is how far along it is. */}
+          <SectionLabel>MFG — Manufacturing / Fabrication</SectionLabel>
+
+          <div className="rounded-xl bg-muted/40 p-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="if-mfgplan"
+                  className="text-[10px] uppercase tracking-wider text-muted-foreground"
+                >
+                  Plan %
+                </Label>
+                <Input
+                  id="if-mfgplan" type="number" min={0} max={100}
+                  value={form.mfgPlan} onChange={set('mfgPlan')}
+                  aria-invalid={!!errors.mfgPlan}
+                />
+                {errors.mfgPlan && (
+                  <p className="text-xs leading-snug text-destructive">{errors.mfgPlan}</p>
+                )}
+              </div>
+              <div className="grid gap-1.5">
+                <Label
+                  htmlFor="if-mfgactual"
+                  className="text-[10px] uppercase tracking-wider text-muted-foreground"
+                >
+                  Actual %
+                </Label>
+                <Input
+                  id="if-mfgactual" type="number" min={0} max={100}
+                  value={form.mfgActual} onChange={set('mfgActual')}
+                  aria-invalid={!!errors.mfgActual}
+                />
+                {errors.mfgActual && (
+                  <p className="text-xs leading-snug text-destructive">{errors.mfgActual}</p>
+                )}
+              </div>
+            </div>
+            <Input
+              className="mt-3 text-[13px]"
+              value={form.mfgNote} onChange={set('mfgNote')}
+              placeholder="Manufacturing note (optional)"
+            />
+          </div>
+
           {/* ── Milestones ── */}
           <SectionLabel>Milestone Schedule</SectionLabel>
 
@@ -314,7 +445,13 @@ export default function ItemFormModal({
                     >
                       {label}
                     </Label>
-                    <Input id={`if-${key}`} type="date" value={form[key]} onChange={set(key)} />
+                    <Input
+                      id={`if-${key}`} type="date" value={form[key]} onChange={set(key)}
+                      aria-invalid={!!errors[key]}
+                    />
+                    {errors[key] && (
+                      <p className="text-xs leading-snug text-destructive">{errors[key]}</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -326,6 +463,24 @@ export default function ItemFormModal({
             </div>
           ))}
         </DialogBody>
+
+        {/* The dialog scrolls, so a message beside the offending input can sit
+            well off screen — and a Save button that silently does nothing is
+            worse than no rule at all. This strip never scrolls away. */}
+        {problems.length > 0 && (
+          <div className="shrink-0 border-t border-destructive/20 bg-destructive/5 px-4 py-2.5">
+            <p className="text-sm font-medium text-destructive">
+              {problems.length === 1
+                ? 'One thing needs fixing before this can be saved:'
+                : `${problems.length} things need fixing before this can be saved:`}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {problems.map(text => (
+                <li key={text} className="text-xs leading-snug text-destructive/90">{text}</li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         <DialogFooter className="m-0 shrink-0 rounded-none">
           <Button variant="outline" onClick={onClose}>Cancel</Button>

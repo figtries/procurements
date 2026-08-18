@@ -1,6 +1,8 @@
 import type {
-  Anomaly, ItemStatus, MilestoneEntry, ProcurementItem, Project,
+  Anomaly, ItemStatus, MilestoneEntry, MilestoneKey, ProcurementItem, Project,
 } from '@/types';
+
+export type { MilestoneKey };
 
 /** Fixed engineering disciplines used across the app. */
 export const DISCIPLINES = [
@@ -88,19 +90,55 @@ export function daysDiff(from: string, to: string): number {
   return Math.round((b.getTime() - a.getTime()) / 86400000);
 }
 
+/**
+ * WhatsApp link for a vendor contact number.
+ *
+ * Indonesian numbers get written every way there is — `0812-3456-7890`,
+ * `+62 812 3456 7890`, `62812...`. WhatsApp wants digits with the country
+ * code and no plus, so a leading zero becomes 62 and everything else goes.
+ */
+export function waLink(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 8) return '';
+  const national = digits.startsWith('62') ? digits
+    : digits.startsWith('0') ? `62${digits.slice(1)}`
+    : `62${digits}`;
+  return `https://wa.me/${national}`;
+}
+
+/**
+ * Manufacturing's share of an item's progress. The other three quarters go to
+ * FAT, RTS and MOS, which is why passing FAT lands an item on 50%.
+ */
+export const MFG_WEIGHT = 25;
+
 export function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
 /**
- * Derive item status and progress from milestones.
- * Priority: MOS actual → RTS actual → FAT actual → forecasts → plan dates vs today
+ * Derive item status and progress.
+ *
+ * Progress is four equal quarters: manufacturing, FAT, RTS, MOS. The first one
+ * is the only one that can be partly earned — the vendor reports it as a
+ * percentage, so 45% built is 11% of the item done. The other three are dates:
+ * either the milestone happened or it did not.
+ *
+ * Status priority: MOS actual → RTS actual → FAT actual → forecasts → plan
+ * dates against today.
  */
-export function deriveStatus(item: Pick<ProcurementItem, 'fat' | 'rts' | 'mos' | 'status' | 'progress'>): {
+export function deriveStatus(
+  item: Pick<ProcurementItem, 'fat' | 'rts' | 'mos' | 'status' | 'progress'>
+    & Partial<Pick<ProcurementItem, 'mfg'>>,
+): {
   status: ItemStatus;
   progress: number;
 } {
   const todayStr = today();
+
+  /** Manufacturing is worth the first quarter, pro rata. */
+  const built = Math.max(0, Math.min(1, item.mfg?.actual ?? 0));
+  const mfgProgress = Math.round(built * MFG_WEIGHT);
 
   // If MOS actual done → on site
   if (item.mos.actual) return { status: 'onsite', progress: 100 };
@@ -119,20 +157,21 @@ export function deriveStatus(item: Pick<ProcurementItem, 'fat' | 'rts' | 'mos' |
     return { status: 'ontrack', progress: 50 };
   }
 
-  // Check if any milestone is overdue based on forecast/plan
+  /* Nothing inspected yet, so the score is whatever has been built. The status
+     still comes from the dates: a vendor at 90% with an overdue FAT is late. */
   const fatDeadline = item.fat.forecast || item.fat.plan;
-  if (fatDeadline && fatDeadline < todayStr) return { status: 'late', progress: 15 };
+  if (fatDeadline && fatDeadline < todayStr) return { status: 'late', progress: mfgProgress };
 
   // At risk if FAT is within 14 days
   if (fatDeadline) {
     const diff = daysDiff(todayStr, fatDeadline);
-    if (diff <= 14) return { status: 'atrisk', progress: 20 };
+    if (diff <= 14) return { status: 'atrisk', progress: mfgProgress };
   }
 
   // No milestones → planning
-  if (!fatDeadline) return { status: 'planning', progress: 0 };
+  if (!fatDeadline) return { status: 'planning', progress: mfgProgress };
 
-  return { status: 'ontrack', progress: 25 };
+  return { status: 'ontrack', progress: mfgProgress };
 }
 
 export function getNextMilestone(item: ProcurementItem): string {
@@ -345,8 +384,6 @@ export function computeDeviation(items: ProcurementItem[], project: Project | nu
   }
   return { planPct, actualPct, deviation, slipDays };
 }
-
-export type MilestoneKey = 'fat' | 'rts' | 'mos';
 
 export interface MilestoneStat {
   key: MilestoneKey;

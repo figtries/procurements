@@ -13,7 +13,7 @@ const SEED_VERSION_KEY = 'figtries_seed_version';
  * the browser keeps handing back the rows it saved months ago and the new data
  * never gets a chance to load.
  */
-export const SEED_VERSION = '2-vendor-roster';
+export const SEED_VERSION = '4-mfg-contact-and-rule-clean';
 
 export function loadProjects(): Project[] {
   if (typeof window === 'undefined') return [];
@@ -39,6 +39,10 @@ function migrateItem(raw: Partial<ProcurementItem>): ProcurementItem {
     readinessDoc: typeof raw.readinessDoc === 'number' ? raw.readinessDoc : 0,
     doNo: raw.doNo ?? '',
     termOfPayment: raw.termOfPayment ?? '',
+    vendorPic: raw.vendorPic ?? '',
+    vendorPhone: raw.vendorPhone ?? '',
+    mfg: raw.mfg ?? { plan: 0, actual: 0, note: '' },
+    events: Array.isArray(raw.events) ? raw.events : [],
   } as ProcurementItem;
 }
 

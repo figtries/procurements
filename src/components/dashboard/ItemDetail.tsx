@@ -1,9 +1,12 @@
 'use client';
 
 import { ViewTransition } from 'react';
-import { ArrowLeft, Clock, Package, Pencil, Trash2, TriangleAlert } from 'lucide-react';
+import {
+  ArrowLeft, Clock, MessageCircle, Package, Pencil, ShieldAlert, Trash2, TriangleAlert,
+} from 'lucide-react';
 import type { ProcurementItem } from '@/types';
-import { fmtDate } from '@/lib/procurement';
+import { fmtDate, waLink } from '@/lib/procurement';
+import { blockers, validateItem } from '@/lib/rules';
 import StatusBadge from './Badge';
 import DisciplineBadge from './DisciplineBadge';
 import MilestoneRow from './MilestoneRow';
@@ -11,6 +14,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import UpdateLog from './UpdateLog';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
@@ -99,6 +103,11 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
   const isAtRisk = item.status === 'atrisk';
 
   const readinessPct = Math.round((item.readinessDoc || 0) * 100);
+  /** Percentage points the vendor is ahead of, or behind, the manufacturing plan. */
+  const mfgGap = Math.round((item.mfg.actual - item.mfg.plan) * 100);
+
+  const violations = validateItem(item);
+  const hasBlockers = blockers(violations).length > 0;
   const readinessTone = READINESS_TONES[
     readinessPct < 50 ? 'low' : readinessPct < 90 ? 'mid' : 'full'
   ];
@@ -110,6 +119,8 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
    *  a short last row would leave a bare slab of divider showing. */
   const fields = [
     { label: 'Supplier / Vendor', value: item.vendor },
+    { label: 'PIC', value: item.vendorPic },
+    { label: 'PIC Number', value: item.vendorPhone, wa: waLink(item.vendorPhone) },
     { label: 'Brand', value: item.brand },
     { label: 'Qty / Unit', value: `${item.qty} ${item.unit}`.trim() },
     { label: 'Delivery Term', value: item.delivery },
@@ -139,6 +150,31 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
             {isLate
               ? 'A milestone deadline has passed with no actual date recorded.'
               : 'FAT falls due within 14 days. Confirm readiness with the vendor.'}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Records saved before a rule existed, or imported around it, still have
+          to be visible — the form blocks new breaches, this catches old ones. */}
+      {violations.length > 0 && (
+        <Alert className={cn(
+          'motion-safe:animate-in motion-safe:fade-in',
+          hasBlockers
+            ? 'border-late/25 bg-late-bg text-late-fg'
+            : 'border-atrisk/30 bg-atrisk-bg text-atrisk-fg',
+        )}>
+          <ShieldAlert />
+          <AlertTitle>
+            {hasBlockers
+              ? 'This record breaks the procurement sequence.'
+              : 'Worth checking.'}
+          </AlertTitle>
+          <AlertDescription className={hasBlockers ? 'text-late-fg/80' : 'text-atrisk-fg/80'}>
+            <ul className="space-y-1">
+              {violations.map(v => (
+                <li key={`${v.field}-${v.message}`}>{v.message}</li>
+              ))}
+            </ul>
           </AlertDescription>
         </Alert>
       )}
@@ -191,7 +227,7 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
           <div className="grid gap-5 border-t p-4 sm:grid-cols-2 sm:gap-6 sm:p-5">
             <Meter
               label="Overall Progress"
-              caption="Based on completed milestones"
+              caption="Manufacturing, FAT, RTS and delivery"
               pct={item.progress}
             />
             <Meter
@@ -216,7 +252,21 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
                   'mt-1 text-sm font-medium break-words',
                   !f.value && 'text-muted-foreground',
                 )}>
-                  {f.value || '—'}
+                  {/* The number is the one field here worth making actionable:
+                      chasing a vendor starts with a message, not a copy-paste. */}
+                  {f.value && f.wa ? (
+                    <a
+                      href={f.wa}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-4 hover:text-ok-fg"
+                    >
+                      <MessageCircle className="size-3.5" />
+                      {f.value}
+                    </a>
+                  ) : (
+                    f.value || '—'
+                  )}
                 </dd>
               </div>
             ))}
@@ -231,6 +281,32 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
             <CardTitle>Milestone Schedule</CardTitle>
           </CardHeader>
           <CardContent className="pt-1">
+            {/* Manufacturing runs for months before the first dated milestone,
+                so it leads the schedule as a bar rather than a row of dates. */}
+            <div className="mb-4 rounded-xl bg-muted/40 p-3.5">
+              <Meter
+                label="MFG — Manufacturing / Fabrication"
+                caption={
+                  item.mfg.plan
+                    ? `Plan ${Math.round(item.mfg.plan * 100)}%`
+                      + (mfgGap === 0
+                        ? ' · on plan'
+                        : mfgGap < 0
+                          ? ` · ${Math.abs(mfgGap)}% behind`
+                          : ` · ${mfgGap}% ahead`)
+                    : 'No plan set'
+                }
+                pct={Math.round(item.mfg.actual * 100)}
+                valueClassName={mfgGap < 0 ? 'text-atrisk-fg' : undefined}
+                railClassName={mfgGap < 0 ? 'bg-atrisk' : undefined}
+              />
+              {item.mfg.note && (
+                <p className="mt-2.5 text-[13px] leading-snug text-muted-foreground">
+                  {item.mfg.note}
+                </p>
+              )}
+            </div>
+
             <MilestoneRow name="FAT — Factory Acceptance Test" ms={item.fat} index={0} />
             <MilestoneRow name="RTS — Ready To Ship" ms={item.rts} index={1} />
             <MilestoneRow name="MOS — Material On Site" ms={item.mos} index={2} last />
@@ -298,6 +374,8 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
           )}
         </div>
       </div>
+
+      <UpdateLog events={item.events} />
     </div>
   );
 }

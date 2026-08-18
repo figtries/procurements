@@ -4,6 +4,9 @@ import { useRef, useState } from 'react';
 import { FileSpreadsheet, TriangleAlert, Upload } from 'lucide-react';
 import type { ImportResult, ImportedRow, ProcurementItem } from '@/types';
 import { importWorkbook } from '@/lib/excelImport';
+import {
+  readVendorWorkbook, type VendorColumn, type VendorImportResult,
+} from '@/lib/vendorImport';
 import { DISCIPLINES, fmtDate } from '@/lib/procurement';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,14 +26,32 @@ import { cn } from '@/lib/utils';
 interface ImportModalProps {
   open: boolean;
   existingItems: ProcurementItem[];
+  /** Guards a vendor form returned against a different project. */
+  projectId: string;
   onClose: () => void;
   onConfirm: (rows: ImportedRow[]) => void;
+  onConfirmVendor: (result: VendorImportResult, columns: VendorColumn[]) => void;
 }
 
+/** Dates read back from a vendor form arrive as ISO; everything else is text. */
+function showValue(raw: string): string {
+  if (!raw) return '—';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return fmtDate(raw);
+  if (/^0?\.\d+$|^1$|^0$/.test(raw)) return `${Math.round(Number(raw) * 100)}%`;
+  return raw;
+}
+
+const CHANGE_TONE: Record<string, string> = {
+  slip: 'text-atrisk-fg',
+  gain: 'text-ok-fg',
+  milestone: 'text-ok-fg',
+};
+
 export default function ImportModal({
-  open, existingItems, onClose, onConfirm,
+  open, existingItems, projectId, onClose, onConfirm, onConfirmVendor,
 }: ImportModalProps) {
   const [result, setResult]     = useState<ImportResult | null>(null);
+  const [vendor, setVendor]     = useState<VendorImportResult | null>(null);
   const [fileName, setFileName] = useState('');
   const [reading, setReading]   = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -38,6 +59,7 @@ export default function ImportModal({
 
   const reset = () => {
     setResult(null);
+    setVendor(null);
     setFileName('');
     setReading(false);
     setDragging(false);
@@ -55,6 +77,13 @@ export default function ImportModal({
     // would leave the import stuck if the user switched away.
     await new Promise(resolve => setTimeout(resolve, 32));
     try {
+      // A vendor form carries our own marker, so it is offered to that reader
+      // first; anything else falls through to the header-guessing importer.
+      const asVendor = await readVendorWorkbook(file, existingItems, projectId);
+      if (asVendor.isVendorForm) {
+        setVendor(asVendor);
+        return;
+      }
       setResult(await importWorkbook(file, existingItems));
     } catch (err) {
       setResult({ rows: [], sheetsRead: [], errors: [`Could not read the file: ${(err as Error).message}`] });
@@ -67,6 +96,17 @@ export default function ImportModal({
     setResult(prev => prev && {
       ...prev,
       rows: prev.rows.map((r, i) => (i === index ? { ...r, ...patch } : r)),
+    });
+  };
+
+  const vendorColumns   = vendor?.columns ?? [];
+  const vendorSelected  = vendorColumns.filter(c => c.include && c.changes.length);
+  const vendorChanges   = vendorSelected.reduce((n, c) => n + c.changes.length, 0);
+
+  const toggleColumn = (index: number, include: boolean) => {
+    setVendor(prev => prev && {
+      ...prev,
+      columns: prev.columns.map((c, i) => (i === index ? { ...c, include } : c)),
     });
   };
 
@@ -89,16 +129,19 @@ export default function ImportModal({
     <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
       <DialogContent className="flex max-h-[85svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-5xl">
         <DialogHeader className="shrink-0 p-4 pb-3">
-          <DialogTitle>Import from Excel</DialogTitle>
+          <DialogTitle>{vendor ? 'Vendor progress update' : 'Import from Excel'}</DialogTitle>
           <DialogDescription>
-            Every sheet is read, header rows are detected, and disciplines are split out of
-            section rows such as “A. ELECTRICAL”.
+            {vendor
+              ? 'Only the cells the vendor was asked to fill are read. A blank cell means '
+                + 'no news, so nothing you already have is cleared.'
+              : 'Every sheet is read, header rows are detected, and disciplines are split '
+                + 'out of section rows such as “A. ELECTRICAL”.'}
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody className="p-4">
           {/* ── Drop zone ── */}
-          {!result && !reading && (
+          {!result && !vendor && !reading && (
             <button
               type="button"
               onDragOver={e => { e.preventDefault(); setDragging(true); }}
@@ -161,6 +204,113 @@ export default function ImportModal({
           />
 
           {/* ── Errors ── */}
+          {vendor?.errors.map(err => (
+            <div
+              key={err}
+              className="mb-3 flex items-start gap-2.5 rounded-lg border border-late/20 bg-late-bg px-3.5 py-2.5 text-sm text-late-fg"
+            >
+              <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+              <span>{err}</span>
+            </div>
+          ))}
+
+          {/* ── Vendor form: one card per item, showing what moved ── */}
+          {vendor && !vendor.errors.length && (
+            <>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-muted/60 px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <FileSpreadsheet className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate text-sm font-medium">{vendor.vendor}</span>
+                  <Button variant="link" size="sm" className="h-auto p-0" onClick={reset}>
+                    Change file
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span>{vendor.projectName}</span>
+                  {vendor.generatedAt && (
+                    <span>form issued {fmtDate(vendor.generatedAt.slice(0, 10))}</span>
+                  )}
+                </div>
+              </div>
+
+              {vendorChanges === 0 ? (
+                <p className="rounded-xl bg-muted/60 px-4 py-8 text-center text-sm text-muted-foreground">
+                  This form matches what we already hold — nothing to apply.
+                </p>
+              ) : (
+                <p className="mb-2.5 text-sm text-muted-foreground">
+                  <b className="text-foreground tabular">{vendorChanges}</b> change
+                  {vendorChanges === 1 ? '' : 's'} across{' '}
+                  <b className="text-foreground tabular">{vendorSelected.length}</b> item
+                  {vendorSelected.length === 1 ? '' : 's'}
+                </p>
+              )}
+
+              <div className="space-y-2.5">
+                {vendorColumns.map((column, i) => (
+                  <div
+                    key={column.itemId}
+                    className={cn(
+                      'rounded-xl border p-3.5 transition-colors',
+                      !column.changes.length && 'opacity-60',
+                      column.include && column.changes.length && 'bg-muted/30',
+                      column.blocked && 'border-late/25 bg-late-bg',
+                    )}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      {column.changes.length > 0 && !column.blocked && (
+                        <Checkbox
+                          checked={column.include}
+                          onCheckedChange={v => toggleColumn(i, v === true)}
+                          aria-label={`Apply changes to ${column.desc}`}
+                          className="mt-0.5"
+                        />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug">{column.desc}</p>
+
+                        {column.changes.length === 0 && !column.warnings.length && (
+                          <p className="mt-1 text-xs text-muted-foreground">No change reported.</p>
+                        )}
+
+                        <ul className="mt-2 space-y-1">
+                          {column.changes.map(change => (
+                            <li key={change.key} className="text-[13px] leading-snug">
+                              <span className="text-muted-foreground">
+                                {change.stage ? `${change.stage} ${change.label}` : change.label}
+                              </span>
+                              {'  '}
+                              <span className={cn('tabular', CHANGE_TONE[change.kind])}>
+                                {showValue(change.from)} → <b>{showValue(change.to)}</b>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+
+                        {column.blocked && column.changes.length > 0 && (
+                          <p className="mt-1.5 text-xs font-semibold text-late-fg">
+                            Held back — this update would break the procurement sequence.
+                          </p>
+                        )}
+                        {column.warnings.map(w => (
+                          <p
+                            key={w}
+                            className={cn(
+                              'mt-1.5 text-xs leading-snug',
+                              column.blocked ? 'text-late-fg' : 'text-atrisk-fg',
+                            )}
+                          >
+                            {w}
+                          </p>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           {result?.errors.map(err => (
             <div
               key={err}
@@ -326,12 +476,21 @@ export default function ImportModal({
 
         <DialogFooter className="m-0 shrink-0 rounded-none">
           <Button variant="outline" onClick={close}>Cancel</Button>
-          <Button
-            disabled={!selected.length || needsDiscipline > 0}
-            onClick={() => { onConfirm(selected); reset(); }}
-          >
-            {selected.length ? `Import ${selected.length} item${selected.length === 1 ? '' : 's'}` : 'Import'}
-          </Button>
+          {vendor ? (
+            <Button
+              disabled={!vendorChanges}
+              onClick={() => { onConfirmVendor(vendor, vendorSelected); reset(); }}
+            >
+              {vendorChanges ? `Apply ${vendorChanges} change${vendorChanges === 1 ? '' : 's'}` : 'Apply'}
+            </Button>
+          ) : (
+            <Button
+              disabled={!selected.length || needsDiscipline > 0}
+              onClick={() => { onConfirm(selected); reset(); }}
+            >
+              {selected.length ? `Import ${selected.length} item${selected.length === 1 ? '' : 's'}` : 'Import'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

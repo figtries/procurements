@@ -1,10 +1,49 @@
 export type ItemStatus = 'planning' | 'ontrack' | 'atrisk' | 'late' | 'onsite';
 
+/** The three milestones every item is tracked through. */
+export type MilestoneKey = 'fat' | 'rts' | 'mos';
+
+/**
+ * How far the vendor has got building the thing, before any of it can be
+ * inspected or shipped.
+ *
+ * Held as a pair of percentages rather than dates, because that is how vendors
+ * actually report it week to week: the schedule says 60% by now, they say 45%,
+ * and the gap is the warning. Both are 0–1.
+ */
+export interface ManufacturingProgress {
+  /** Where the schedule says fabrication should be. Ours to set. */
+  plan: number;
+  /** What the vendor reports. */
+  actual: number;
+  note: string;
+}
+
 export interface MilestoneEntry {
   plan: string;
   forecast: string;
   actual: string;
   note: string;
+}
+
+/**
+ * One recorded change to an item.
+ *
+ * Written both by hand-editing in the app and by a vendor import, so the
+ * detail page can show a single history rather than two partial ones.
+ */
+export interface ItemEvent {
+  /** ISO timestamp of when the change was applied. */
+  at: string;
+  source: 'manual' | 'vendor-import' | 'own-import' | 'created';
+  /** Vendor name for an import, project PIC for a hand edit. */
+  actor: string;
+  /** Field registry key, e.g. `mos.forecast`. Empty on a 'created' entry. */
+  field: string;
+  from: string;
+  to: string;
+  /** Vendor's explanation, taken from the sheet's "Alasan Perubahan" column. */
+  reason?: string;
 }
 
 export interface ProcurementItem {
@@ -15,6 +54,9 @@ export interface ProcurementItem {
   qty: number;
   unit: string;
   vendor: string;
+  /** Person at the vendor we actually chase, and the number we chase them on. */
+  vendorPic: string;
+  vendorPhone: string;
   brand: string;
   delivery: string;
   poNo: string;
@@ -26,12 +68,16 @@ export interface ProcurementItem {
   doNo: string;
   /** Payment terms, kept per item because a vendor can quote different terms per PO. */
   termOfPayment: string;
+  /** Manufacturing / fabrication, the stretch before FAT. */
+  mfg: ManufacturingProgress;
   fat: MilestoneEntry;
   rts: MilestoneEntry;
   mos: MilestoneEntry;
   status: ItemStatus;
   progress: number;
   createdAt: string;
+  /** Newest first. */
+  events: ItemEvent[];
 }
 
 export interface Project {

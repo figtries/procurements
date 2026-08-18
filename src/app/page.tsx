@@ -30,7 +30,10 @@ import {
   saveProjects,
 } from '@/lib/store';
 import { exportWorkbook } from '@/lib/excelExport';
+import { exportVendorWorkbook } from '@/lib/vendorSheet';
+import { applyVendorImport, type VendorColumn, type VendorImportResult } from '@/lib/vendorImport';
 import { deriveStatus, STATUS_LABELS } from '@/lib/procurement';
+import { appendEvents, createdEvent, diffItem } from '@/lib/itemLog';
 import type {
   GroupBy, ImportedRow, ItemStatus, MilestoneEntry, PageName, ProcurementItem, Project,
 } from '@/types';
@@ -243,13 +246,17 @@ export default function ProcurementApp() {
   }
 
   function handleSaveItem(form: ItemFormState) {
-    const base: Omit<ProcurementItem, 'id' | 'status' | 'progress' | 'createdAt'> = {
+    const base: Omit<
+      ProcurementItem, 'id' | 'status' | 'progress' | 'createdAt' | 'events'
+    > = {
       projectId: activeProject?.id ?? '',
       desc: form.desc.trim(),
       discipline: form.discipline,
       qty: Number(form.qty),
       unit: form.unit.trim(),
       vendor: form.vendor.trim(),
+      vendorPic: form.vendorPic.trim(),
+      vendorPhone: form.vendorPhone.trim(),
       brand: form.brand.trim(),
       delivery: form.delivery.trim(),
       poNo: form.poNo.trim(),
@@ -258,25 +265,42 @@ export default function ProcurementApp() {
       readinessDoc: Math.max(0, Math.min(1, (Number(form.readinessDoc) || 0) / 100)),
       doNo: form.doNo.trim(),
       termOfPayment: form.termOfPayment.trim(),
+      mfg: {
+        plan: Math.max(0, Math.min(1, (Number(form.mfgPlan) || 0) / 100)),
+        actual: Math.max(0, Math.min(1, (Number(form.mfgActual) || 0) / 100)),
+        note: form.mfgNote.trim(),
+      },
       fat: buildMilestone(form.fatPlan, form.fatFc, form.fatAct, form.fatNote),
       rts: buildMilestone(form.rtsPlan, form.rtsFc, form.rtsAct, form.rtsNote),
       mos: buildMilestone(form.mosPlan, form.mosFc, form.mosAct, form.mosNote),
     };
     const derived = deriveStatus(base as ProcurementItem);
 
+    // Hand edits are logged the same way an import is, so the update log on the
+    // detail page reads as one history rather than only what vendors sent.
+    const actor = activeProject?.pic || 'Procurement';
+
     if (editingItem) {
-      const updated = items.map(i =>
-        i.id === editingItem.id ? { ...i, ...base, ...derived } : i
-      );
+      const draft = { ...editingItem, ...base, ...derived };
+      const next: ProcurementItem = {
+        ...draft,
+        events: appendEvents(
+          editingItem,
+          diffItem(editingItem, draft, { source: 'manual', actor }),
+        ),
+      };
+      const updated = items.map(i => (i.id === next.id ? next : i));
       setItems(updated);
       saveItems(updated);
-      if (detailItem?.id === editingItem.id) {
-        setDetailItem({ ...editingItem, ...base, ...derived });
-      }
+      if (detailItem?.id === next.id) setDetailItem(next);
       toast.success('Item updated.');
     } else {
       const newItem: ProcurementItem = {
-        ...base, id: genId(), ...derived, createdAt: new Date().toISOString(),
+        ...base,
+        id: genId(),
+        ...derived,
+        createdAt: new Date().toISOString(),
+        events: [createdEvent({ source: 'created', actor })],
       };
       const updated = [...items, newItem];
       setItems(updated);
@@ -293,6 +317,14 @@ export default function ProcurementApp() {
     const projectId = activeProject?.id ?? '';
     const byId = new Map(items.map(i => [i.id, i]));
     let updated = 0, inserted = 0;
+
+    // One timestamp for the whole batch, so the update log groups the import
+    // as a single event rather than scattering it across the same second.
+    const logCtx = {
+      source: 'own-import' as const,
+      actor: activeProject?.pic || 'Procurement',
+      at: new Date().toISOString(),
+    };
 
     for (const row of rows) {
       const base = {
@@ -318,11 +350,24 @@ export default function ProcurementApp() {
 
       if (row.matchesItemId && byId.has(row.matchesItemId)) {
         const existing = byId.get(row.matchesItemId)!;
-        byId.set(existing.id, { ...existing, ...base, ...derived });
+        const draft = { ...existing, ...base, ...derived };
+        byId.set(existing.id, {
+          ...draft,
+          events: appendEvents(existing, diffItem(existing, draft, logCtx)),
+        });
         updated++;
       } else {
         const item: ProcurementItem = {
-          ...base, id: genId(), ...derived, createdAt: new Date().toISOString(),
+          // The older sheet format carries neither a vendor contact nor a
+          // manufacturing figure; both get filled in by hand or by the next
+          // vendor form.
+          vendorPic: '', vendorPhone: '',
+          mfg: { plan: 0, actual: 0, note: '' },
+          ...base,
+          id: genId(),
+          ...derived,
+          createdAt: new Date().toISOString(),
+          events: [createdEvent(logCtx)],
         };
         byId.set(item.id, item);
         inserted++;
@@ -359,6 +404,44 @@ export default function ProcurementApp() {
     } finally {
       setExporting(false);
     }
+  }
+
+  /** One vendor's progress form. No revision bump: this is not the client's copy. */
+  async function handleExportVendor(vendor: string) {
+    setExporting(true);
+    try {
+      const fileName = await exportVendorWorkbook(activeProject, vendor, projectItems);
+      toast.success(`Form for ${vendor} downloaded`, { description: fileName });
+    } catch (err) {
+      toast.error('Export failed', { description: (err as Error).message });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  /** Apply a returned vendor form: reviewed changes only, each one logged. */
+  function handleVendorImport(result: VendorImportResult, columns: VendorColumn[]) {
+    const applied = applyVendorImport(items, result, columns);
+    startNav(() => {
+      setItems(applied.items);
+      setImportOpen(false);
+    });
+    saveItems(applied.items);
+
+    // The detail screen may be showing one of the items that just moved.
+    if (detailItem) {
+      const fresh = applied.items.find(i => i.id === detailItem.id);
+      if (fresh) setDetailItem(fresh);
+    }
+
+    if (!applied.updated) {
+      toast.info('Nothing to apply', { description: 'The form held no new information.' });
+      return;
+    }
+    toast.success(`${result.vendor || 'Vendor'} form applied`, {
+      description: `${applied.changed} change${applied.changed === 1 ? '' : 's'} across `
+        + `${applied.updated} item${applied.updated === 1 ? '' : 's'}.`,
+    });
   }
 
   function confirmDeleteItem(item: ProcurementItem) {
@@ -501,6 +584,7 @@ export default function ProcurementApp() {
                   }}
                   onImport={() => setImportOpen(true)}
                   onExport={handleExport}
+                  onExportVendor={handleExportVendor}
                   exporting={exporting}
                   onAddItem={() => openItemForm()}
                   onOpenDetail={openDetail}
@@ -545,8 +629,10 @@ export default function ProcurementApp() {
       <ImportModal
         open={importOpen}
         existingItems={projectItems}
+        projectId={activeProject?.id ?? ''}
         onClose={() => setImportOpen(false)}
         onConfirm={handleImportConfirm}
+        onConfirmVendor={handleVendorImport}
       />
 
       <ItemFormModal

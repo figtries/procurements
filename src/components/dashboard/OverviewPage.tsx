@@ -12,6 +12,10 @@ import GroupCard from './GroupCard';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
+  DropdownMenuSeparator, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
   Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
 } from '@/components/ui/empty';
 import {
@@ -45,6 +49,7 @@ interface OverviewPageProps {
   onClearFilters: () => void;
   onImport: () => void;
   onExport: () => void;
+  onExportVendor: (vendor: string) => void;
   exporting: boolean;
   onAddItem: () => void;
   onOpenDetail: (item: ProcurementItem) => void;
@@ -155,7 +160,7 @@ export default function OverviewPage({
   projectItems, filteredItems, grouped, groupBy, search,
   filterStatus, filterDisc, filterVendor, hasFilters, uniqueDiscs, uniqueVendors,
   hasProject, morphItemId, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
-  onClearFilters, onImport, onExport, exporting, onAddItem, onOpenDetail,
+  onClearFilters, onImport, onExport, onExportVendor, exporting, onAddItem, onOpenDetail,
 }: OverviewPageProps) {
   /** Filtering runs in a transition so the list crossfades instead of snapping. */
   const [, startFilter] = useTransition();
@@ -199,17 +204,39 @@ export default function OverviewPage({
             <ArrowDownToLine />
             <span className="truncate">Import<span className="hidden md:inline">&nbsp;Excel</span></span>
           </Button>
-          <Button
-            variant="outline" size="lg"
-            className="min-w-0 flex-1 sm:flex-none"
-            onClick={onExport}
-            disabled={!total || exporting}
-          >
-            {exporting ? <Spinner /> : <ArrowUpFromLine />}
-            <span className="truncate">
-              {exporting ? 'Preparing…' : <>Export<span className="hidden md:inline">&nbsp;Excel</span></>}
-            </span>
-          </Button>
+          {/* Two things can be exported now, so the button opens rather than
+              fires. The project workbook stays first: it is the one reached
+              daily, and the vendor forms are a list that grows. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="outline" size="lg"
+                  className="min-w-0 flex-1 sm:flex-none"
+                  disabled={!total || exporting}
+                />
+              }
+            >
+              {exporting ? <Spinner /> : <ArrowUpFromLine />}
+              <span className="truncate">
+                {exporting ? 'Preparing…' : <>Export<span className="hidden md:inline">&nbsp;Excel</span></>}
+              </span>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem onClick={onExport}>
+                Project workbook
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Vendor progress form</DropdownMenuLabel>
+              <div className="max-h-64 overflow-y-auto">
+                {uniqueVendors.map(vendor => (
+                  <DropdownMenuItem key={vendor} onClick={() => onExportVendor(vendor)}>
+                    <span className="truncate">{vendor}</span>
+                  </DropdownMenuItem>
+                ))}
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button size="lg" className="min-w-0 flex-1 sm:flex-none" onClick={onAddItem}>
             <Plus />
             <span className="truncate">Add item</span>
