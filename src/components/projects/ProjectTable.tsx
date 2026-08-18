@@ -31,14 +31,6 @@ interface ProjectTableProps {
   onClearFilters: () => void;
 }
 
-/** Dot colour per health, written out in full so Tailwind can see the classes. */
-const HEALTH_DOT: Record<ProjectSummary['health'], string> = {
-  attention: 'bg-late',
-  ontrack:   'bg-ontrack',
-  done:      'bg-onsite',
-  empty:     'bg-muted-foreground/40',
-};
-
 /**
  * Handover read as a countdown. Stated plainly and never coloured: the list
  * reports where each project stands, and the urgency is raised inside the
@@ -57,10 +49,6 @@ const HEAD = 'text-[11px] font-semibold uppercase tracking-wider text-muted-fore
 /** The rail that marks the active project, on whichever layout is showing. */
 const ACTIVE_RAIL =
   'before:absolute before:inset-y-0 before:left-0 before:w-[3px] before:bg-primary';
-
-function Dot({ health }: { health: ProjectSummary['health'] }) {
-  return <span className={cn('size-2 shrink-0 rounded-full', HEALTH_DOT[health])} />;
-}
 
 /**
  * Shared by both layouts. On a touch screen the trigger grows to 36px through
@@ -147,73 +135,61 @@ export default function ProjectTable({
     // card actually has rather than to the width of the window — the sidebar
     // can take 16rem of it, and a tablet in portrait is not a phone.
     <Card className="@container gap-0 overflow-hidden py-0">
-      {/* ── Phone: one stacked block per project ──
+      {/* ── Phone: name and client, one project per line ──
           A table narrower than about 42rem can only be read by dragging it
-          sideways, which is no way to look at a list on a phone. The same
-          fields stack instead, and nothing is left off. */}
-      {/* No rules between the rows on either layout. Every project already
-          ends in a progress bar, which closes its block far more quietly than
-          a line drawn across the card; with both, the card was mostly ruling.
-          What is left to separate rows is the space between them, so the rows
-          are given enough of it to do the job. */}
+          sideways, which is no way to look at a list on a phone. Carrying
+          every column down into a stack was no better: eight fields per
+          project turned the list into a wall. So the phone keeps only what it
+          takes to pick a project out — its name and whose it is — and the
+          rest waits for the width the table needs anyway.
+
+          The row menu goes with them. Its actions all live elsewhere on a
+          phone: tapping the row makes the project active, and the hero above
+          this list opens and deletes whichever project that is. Keeping the
+          trigger only cost the name the width it was truncating against.
+
+          Which project is active is said by the rail alone here — a chip
+          beside the name was one more thing crowding the same line.
+
+          No rules between the rows on either layout; the space between them
+          is what separates one project from the next. */}
       <ul className="@2xl:hidden">
-        {rows.map(({ project: p, itemCount, progress, health, daysToHandover }) => {
+        {rows.map(({ project: p, progress }) => {
           const isActive = activeProjectId === p.id;
-          const hint     = handoverHint(daysToHandover);
 
           return (
             <li
               key={p.id}
               className={cn(
-                'relative cursor-pointer transition-colors active:bg-muted/50',
+                'relative transition-colors active:bg-muted/50',
                 isActive && ACTIVE_RAIL,
               )}
-              onClick={() => onSelect(p.id)}
             >
-              <div className="flex items-start gap-2 px-4 pt-4 pb-2.5">
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 text-left outline-none focus-visible:underline focus-visible:underline-offset-4"
-                  onClick={e => { e.stopPropagation(); onSelect(p.id); }}
-                >
-                  <span className="flex items-center gap-2">
-                    <Dot health={health} />
-                    <span className="truncate font-medium">{p.name}</span>
-                    {isActive && <Badge variant="outline" className="shrink-0">Active</Badge>}
-                  </span>
-                  <span className="mt-1 block truncate pl-4 text-[13px] text-muted-foreground">
+              {/* One button, the whole row. The only thing beside the name is
+                  the percentage, at a fixed width against the right edge: four
+                  characters at their widest, so the name is truncated by the
+                  card rather than by whatever this row happens to say. Down
+                  the list the digits line up into a column, which is the point
+                  — it is read by scanning the edge, not row by row. */}
+              <button
+                type="button"
+                className="flex w-full items-baseline gap-3 px-4 py-3.5 text-left outline-none focus-visible:underline focus-visible:underline-offset-4"
+                onClick={() => onSelect(p.id)}
+              >
+                <span className="min-w-0 flex-1">
+                  {/* A size larger than the table sets on the other layout.
+                      A row here holds two lines where a table row holds eight
+                      columns, so the type can take the room the phone has
+                      instead of being sized by a grid that is not showing. */}
+                  <span className="block truncate text-base font-medium">{p.name}</span>
+                  <span className="mt-0.5 block truncate text-sm text-muted-foreground">
                     {p.client || 'No client'}
-                    {p.location && ` · ${p.location}`}
                   </span>
-                  <span className="mt-0.5 block truncate pl-4 text-xs text-muted-foreground tabular">
-                    {itemCount} item{itemCount === 1 ? '' : 's'}
-                    {p.contractNo && ` · ${p.contractNo}`}
-                    {p.handover && ` · ${fmtDate(p.handover)}`}
-                    {hint && ` · ${hint}`}
-                  </span>
-                </button>
-
-                <div
-                  className="flex shrink-0 items-center gap-1"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <span className="text-sm font-medium tabular">{progress}%</span>
-                  <RowMenu
-                    project={p}
-                    isActive={isActive}
-                    onSelect={onSelect}
-                    onOpen={onOpen}
-                    onDelete={onDelete}
-                  />
-                </div>
-              </div>
-
-              <Progress
-                value={progress}
-                className="px-4 pb-4"
-                trackClassName="h-1 bg-foreground/10"
-                indicatorClassName="transition-[width] duration-700"
-              />
+                </span>
+                <span className="w-12 shrink-0 text-right text-base font-medium tabular">
+                  {progress}%
+                </span>
+              </button>
             </li>
           );
         })}
@@ -252,7 +228,7 @@ export default function ProjectTable({
           </TableHeader>
 
           <TableBody>
-            {rows.map(({ project: p, itemCount, progress, health, daysToHandover }) => {
+            {rows.map(({ project: p, itemCount, progress, daysToHandover }) => {
               const isActive = activeProjectId === p.id;
               const hint     = handoverHint(daysToHandover);
 
@@ -272,7 +248,6 @@ export default function ProjectTable({
                       className="flex max-w-[13rem] items-center gap-2 text-left outline-none @4xl:max-w-[16rem] focus-visible:underline focus-visible:underline-offset-4"
                       onClick={e => { e.stopPropagation(); onSelect(p.id); }}
                     >
-                      <Dot health={health} />
                       <span className="truncate font-medium">{p.name}</span>
                       {isActive && <Badge variant="outline" className="shrink-0">Active</Badge>}
                     </button>
