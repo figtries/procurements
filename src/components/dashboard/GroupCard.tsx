@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import type { GroupBy, ProcurementItem } from '@/types';
 import { getDisciplineStyle } from '@/lib/procurement';
 import ItemCard from './ItemCard';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious,
+  type CarouselApi,
+} from '@/components/ui/carousel';
 import { ItemGroup } from '@/components/ui/item';
 
 /** A group shows this many rows at a time; the rest arrive by swiping. */
@@ -17,8 +19,8 @@ interface GroupCardProps {
   group: { key: string; label: string; items: ProcurementItem[] };
   groupBy: GroupBy;
   /** The row the detail screen was last opened from, wherever it happens to
-   *  sit — it is the one that morphs into that screen and back. */
-  morphItemId?: string | null;
+   *  sit — the pager opens on whichever page holds it. */
+  lastOpenedId?: string | null;
   onOpenDetail: (item: ProcurementItem) => void;
 }
 
@@ -61,10 +63,9 @@ function Heading({ group, groupBy, children }: {
   );
 }
 
-function Rows({ items, groupBy, morphItemId, onOpenDetail }: {
+function Rows({ items, groupBy, onOpenDetail }: {
   items: ProcurementItem[];
   groupBy: GroupBy;
-  morphItemId?: string | null;
   onOpenDetail: (item: ProcurementItem) => void;
 }) {
   return (
@@ -74,7 +75,6 @@ function Rows({ items, groupBy, morphItemId, onOpenDetail }: {
           key={item.id}
           item={item}
           groupBy={groupBy}
-          morph={item.id === morphItemId}
           onClick={() => onOpenDetail(item)}
         />
       ))}
@@ -82,7 +82,7 @@ function Rows({ items, groupBy, morphItemId, onOpenDetail }: {
   );
 }
 
-export default function GroupCard({ group, groupBy, morphItemId, onOpenDetail }: GroupCardProps) {
+export default function GroupCard({ group, groupBy, lastOpenedId, onOpenDetail }: GroupCardProps) {
   const pages = useMemo(() => paginate(group.items), [group.items]);
 
   // Short groups stay a plain list: a pager that can never move would only add
@@ -94,20 +94,22 @@ export default function GroupCard({ group, groupBy, morphItemId, onOpenDetail }:
         <Rows
           items={group.items}
           groupBy={groupBy}
-          morphItemId={morphItemId}
           onOpenDetail={onOpenDetail}
         />
       </Card>
     );
   }
 
+  // The touch-action belongs on a real box, and the carousel inside renders
+  // to `display: contents`, so the card is the one that can hold it: it keeps
+  // embla's non-passive listener from riding on the vertical scroll.
   return (
-    <Card className="gap-0 py-0">
+    <Card className="gap-0 py-0 [touch-action:pan-y_pinch-zoom]">
       <Pager
         pages={pages}
         group={group}
         groupBy={groupBy}
-        morphItemId={morphItemId}
+        lastOpenedId={lastOpenedId}
         onOpenDetail={onOpenDetail}
       />
     </Card>
@@ -115,128 +117,114 @@ export default function GroupCard({ group, groupBy, morphItemId, onOpenDetail }:
 }
 
 /**
- * The pages ride a native scroll-snap track.
+ * The pages of a long group, on the same carousel the discipline breakdown
+ * uses on the dashboard.
  *
- * A JS carousel has to claim the horizontal gesture from the browser, which
- * means every frame of a drag is main-thread work: the finger moves only as
- * fast as React is free to answer it. A desktop CPU hides that — the rows
- * there are even heavier, with three extra columns per row — but a phone
- * cannot, which is why the swipe dragged on a phone and nowhere else.
- *
- * Handing the gesture back to the browser moves it to the compositor: the
- * track follows the finger and keeps its momentum whatever the main thread is
- * doing. The card can then afford its ordinary paint cost, so there is no need
- * to hold a layer open or to stop the off-screen pages drawing.
+ * That one was already light and smooth, and it is the stock registry
+ * component — so this is the app agreeing with itself rather than a second
+ * carousel written by hand. What stood here before was a native scroll-snap
+ * track, which sounds cheaper and is, right up until the arrows: mandatory
+ * snap re-snaps every programmatic scroll the instant it lands, so the only
+ * animation such a track can offer a button press is the UA's own, whose
+ * duration grows with the distance it is given. A page width bought most of
+ * half a second of slow ease-in-out, and that was the weight.
  */
-function Pager({ pages, group, groupBy, morphItemId, onOpenDetail }: {
+function Pager({ pages, group, groupBy, lastOpenedId, onOpenDetail }: {
   pages: ProcurementItem[][];
   group: GroupCardProps['group'];
   groupBy: GroupBy;
-  morphItemId?: string | null;
+  lastOpenedId?: string | null;
   onOpenDetail: (item: ProcurementItem) => void;
 }) {
-  const trackRef = useRef<HTMLDivElement>(null);
+  const [api, setApi] = useState<CarouselApi>();
 
-  /** Coming back from an item lands on the page that item is on.
+  /** Whether the pages nobody is looking at have been built yet.
    *
-   *  Returning to page one would be wrong on its own terms — you asked to go
-   *  back, not to start over — and it also strands the row the detail screen
-   *  morphs back into somewhere off to the side, so the card flies out of the
-   *  card it lives in on its way to a row nobody can see. */
-  const startIndex = Math.max(0, pages.findIndex(p => p.some(i => i.id === morphItemId)));
+   *  Returning to the overview means mounting every row of every page of
+   *  every group — eighty-eight of them here, near four thousand elements —
+   *  and React does that in one commit. Measured, that commit was two long
+   *  tasks back to back and the better part of a second with the main thread
+   *  unavailable, which is the weight the back button had.
+   *
+   *  Only one page of a group can be seen at a time, so only that one has to
+   *  exist before the screen does. The rest arrive on the first idle moment
+   *  after, long before anyone can reach for an arrow. The slide itself is
+   *  never waiting on this: by the time a page can be asked for, it is
+   *  already there. */
+  const [warm, setWarm] = useState(false);
+
+  /** Coming back from an item lands on the page that item is on. Returning to
+   *  page one would be wrong on its own terms: you asked to go back, not to
+   *  start over. Embla takes it as a starting index, so the group is already
+   *  showing the right rows on the first paint rather than sliding to them. */
+  const startIndex = Math.max(0, pages.findIndex(p => p.some(i => i.id === lastOpenedId)));
   const [page, setPage] = useState(startIndex);
 
-  // Take the starting page before the first paint, so the morph lands on a
-  // page already in view rather than scrolling there afterwards. Mount only:
-  // once the track is up, where it sits is the reader's business.
-  useLayoutEffect(() => {
-    const el = trackRef.current;
-    if (el) el.scrollLeft = startIndex * el.clientWidth;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // The heading counter reads the track's own scroll offset, coalesced to one
-  // read a frame. The listener is passive and the arithmetic is a division, so
-  // it cannot hold up a scroll the compositor is already running; and asking
-  // for the page we are on is a no-op in React until that page changes, so a
-  // swipe re-renders the heading once rather than once a frame.
   useEffect(() => {
-    const el = trackRef.current;
-    if (!el) return;
-    let frame = 0;
-    const read = () => {
-      frame = 0;
-      if (el.clientWidth) setPage(Math.round(el.scrollLeft / el.clientWidth));
-    };
-    const onScroll = () => {
-      if (!frame) frame = requestAnimationFrame(read);
-    };
-    el.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      el.removeEventListener('scroll', onScroll);
-      if (frame) cancelAnimationFrame(frame);
-    };
+    // A timer rather than `requestIdleCallback`: idle callbacks are scheduled
+    // against frames, so a tab that is not drawing never gets one and the
+    // pages behind this one would never be built at all — an arrow sliding
+    // into an empty box. The point here is only to land in a *second* task,
+    // which any timeout does, and this one always fires.
+    //
+    // The empty pages hold their own width — `basis-full` does not depend on
+    // what is inside them — so embla measures the same track either way.
+    // Marked non-urgent so React may slice it and yield: building the pages
+    // behind this one is work nobody is waiting on, and it must not be able
+    // to sit on the thread while someone is already scrolling the list it
+    // just handed them.
+    const id = window.setTimeout(() => startTransition(() => setWarm(true)), 0);
+    return () => clearTimeout(id);
   }, []);
 
-  const goTo = (next: number) => {
-    const el = trackRef.current;
-    if (el) el.scrollTo({ left: next * el.clientWidth, behavior: 'smooth' });
-  };
+  useEffect(() => {
+    if (!api) return;
+    const sync = () => setPage(api.selectedScrollSnap());
+    sync();
+    api.on('select', sync);
+    api.on('reInit', sync);
+    return () => {
+      api.off('select', sync);
+      api.off('reInit', sync);
+    };
+  }, [api]);
 
   return (
-    <>
+    // `contents` gives the carousel no box of its own, so the heading and the
+    // pages stay direct children of the card and the arrows can sit up in the
+    // heading while still reaching the carousel's context. The touch-action
+    // has to live on a real box, which is why the card carries it: it is what
+    // keeps embla's non-passive listener off the vertical scroll.
+    <Carousel
+      className="contents"
+      opts={{ align: 'start', startIndex }}
+      setApi={setApi}
+    >
       <Heading group={group} groupBy={groupBy}>
         <div className="flex shrink-0 items-center gap-1">
           <span className="tabular text-xs text-muted-foreground">
             {page + 1}/{pages.length}
           </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            className="size-7 touch-manipulation rounded-full"
-            disabled={page === 0}
-            onClick={() => goTo(page - 1)}
-          >
-            <ChevronLeftIcon />
-            <span className="sr-only">Previous page</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            className="size-7 touch-manipulation rounded-full"
-            disabled={page === pages.length - 1}
-            onClick={() => goTo(page + 1)}
-          >
-            <ChevronRightIcon />
-            <span className="sr-only">Next page</span>
-          </Button>
+          <CarouselPrevious className="static size-7 translate-y-0" />
+          <CarouselNext className="static size-7 translate-y-0" />
         </div>
       </Heading>
-      {/* `overscroll-x-contain` keeps a swipe that runs out of pages from
-          carrying on into the browser's own back gesture. */}
-      <div
-        ref={trackRef}
-        role="region"
-        aria-roledescription="carousel"
-        aria-label={`${group.label} items`}
-        className="no-scrollbar flex snap-x snap-mandatory overflow-x-auto overscroll-x-contain"
-      >
+      <CarouselContent className="ml-0">
         {pages.map((pageItems, p) => (
-          <div
-            key={p}
-            role="group"
-            aria-roledescription="slide"
-            className="slide-depth min-w-0 shrink-0 grow-0 basis-full snap-start snap-always"
-          >
-            <Rows
-              items={pageItems}
-              groupBy={groupBy}
-              morphItemId={morphItemId}
-              onOpenDetail={onOpenDetail}
-            />
-          </div>
+          <CarouselItem key={p} className="pl-0">
+            {/* Page one as well as the page being shown, always. A group's
+                last page is a short one whenever its count is not a round
+                multiple, so landing straight on it would give the card the
+                height of one row and then grow it to five a tick later —
+                a jolt on the very path this is meant to smooth. Page one is
+                full by definition, so it sets the card's height from the
+                first paint, and it costs a single extra row. */}
+            {(warm || p === startIndex || p === 0) && (
+              <Rows items={pageItems} groupBy={groupBy} onOpenDetail={onOpenDetail} />
+            )}
+          </CarouselItem>
         ))}
-      </div>
-    </>
+      </CarouselContent>
+    </Carousel>
   );
 }

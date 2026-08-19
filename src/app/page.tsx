@@ -30,7 +30,7 @@ import {
   saveProjects,
 } from '@/lib/store';
 import { exportWorkbook } from '@/lib/excelExport';
-import { exportVendorWorkbook } from '@/lib/vendorSheet';
+import { exportItemForm, exportVendorWorkbook } from '@/lib/vendorSheet';
 import { applyVendorImport, type VendorColumn, type VendorImportResult } from '@/lib/vendorImport';
 import { deriveStatus, STATUS_LABELS } from '@/lib/procurement';
 import { appendEvents, createdEvent, diffItem } from '@/lib/itemLog';
@@ -84,13 +84,12 @@ export default function ProcurementApp() {
   /* ── Item detail ── */
   const [detailItem, setDetailItem] = useState<ProcurementItem | null>(null);
 
-  /** The one row allowed to fly between the list and the detail screen.
+  /** The item whose detail screen was opened last.
    *
-   *  Naming every row would hand the browser a separate snapshot per item
-   *  and cut that many holes in the page snapshot, for a morph only one of
-   *  them will ever run. Only the row being opened is named, and only while
-   *  the list and the screen it opens are the two ends in play. */
-  const [morphItemId, setMorphItemId] = useState<string | null>(null);
+   *  Coming back, the overview uses it to reopen the pager on the page that
+   *  row is actually on, rather than dropping the reader back at page one of
+   *  a group they had already paged past. */
+  const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
 
   /* ── Item form modal ── */
   const [formOpen, setFormOpen]       = useState(false);
@@ -99,6 +98,12 @@ export default function ProcurementApp() {
   /* ── Excel import / export ── */
   const [importOpen, setImportOpen] = useState(false);
   const [exporting, setExporting]   = useState(false);
+  /**
+   * Set when the import dialog was opened from one item's screen. The overview
+   * takes anything — a returned form, a fresh schedule, new equipment — but an
+   * item's own screen takes that item's form and nothing else.
+   */
+  const [importScope, setImportScope] = useState<ProcurementItem | null>(null);
 
   /* ── Delete modal ── */
   const [deleteOpen, setDeleteOpen]     = useState(false);
@@ -162,14 +167,14 @@ export default function ProcurementApp() {
   }, [startNav]);
 
   const nav = useCallback((p: PageName) => {
-    // Leaving the list-and-detail pair behind: nothing left to fly between,
-    // and a name with only one end to it animates on its own.
-    if (p !== 'overview' && p !== 'itemDetail') setMorphItemId(null);
+    // Leaving the list-and-detail pair behind: there is no list to come
+    // back to a particular page of.
+    if (p !== 'overview' && p !== 'itemDetail') setLastOpenedId(null);
     startPageSwap(() => setPage(p));
   }, [startPageSwap]);
 
   const openDetail = useCallback((item: ProcurementItem) => {
-    setMorphItemId(item.id);
+    setLastOpenedId(item.id);
     startPageSwap(() => {
       setDetailItem(item);
       setPage('itemDetail');
@@ -377,6 +382,7 @@ export default function ProcurementApp() {
     const next = Array.from(byId.values());
     startNav(() => {
       setItems(next);
+      setImportScope(null);
       setImportOpen(false);
     });
     saveItems(next);
@@ -419,11 +425,41 @@ export default function ProcurementApp() {
     }
   }
 
+  /**
+   * The form for one item, cut from its own screen.
+   *
+   * No revision bump: like the vendor form, this is a working file sent out to
+   * be filled in, not the copy the client is given.
+   */
+  async function handleExportItemForm(item: ProcurementItem) {
+    setExporting(true);
+    try {
+      const fileName = await exportItemForm(activeProject, item);
+      toast.success('Progress form downloaded', { description: fileName });
+    } catch (err) {
+      toast.error('Export failed', { description: (err as Error).message });
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  /** Opened bare from the overview, or against one item from its own screen. */
+  function openImport(scope: ProcurementItem | null = null) {
+    setImportScope(scope);
+    setImportOpen(true);
+  }
+
+  function closeImport() {
+    setImportOpen(false);
+    setImportScope(null);
+  }
+
   /** Apply a returned vendor form: reviewed changes only, each one logged. */
   function handleVendorImport(result: VendorImportResult, columns: VendorColumn[]) {
     const applied = applyVendorImport(items, result, columns);
     startNav(() => {
       setItems(applied.items);
+      setImportScope(null);
       setImportOpen(false);
     });
     saveItems(applied.items);
@@ -456,8 +492,8 @@ export default function ProcurementApp() {
       setItems(updated);
       saveItems(updated);
       if (detailItem?.id === deleteTarget.id) {
-        // The row this screen would fly back to no longer exists.
-        setMorphItemId(null);
+        // The row this screen would return to no longer exists.
+        setLastOpenedId(null);
         startPageSwap(() => {
           setDetailItem(null);
           setPage('overview');
@@ -542,7 +578,7 @@ export default function ProcurementApp() {
                   project={activeProject}
                   items={projectItems}
                   onOpenItem={openDetail}
-                  onImport={() => setImportOpen(true)}
+                  onImport={() => openImport()}
                 />
               )}
 
@@ -582,23 +618,25 @@ export default function ProcurementApp() {
                   onClearFilters={() => {
                     setSearch(''); setFilterStatus(''); setFilterDisc(''); setFilterVendor('');
                   }}
-                  onImport={() => setImportOpen(true)}
+                  onImport={() => openImport()}
                   onExport={handleExport}
                   onExportVendor={handleExportVendor}
                   exporting={exporting}
                   onAddItem={() => openItemForm()}
                   onOpenDetail={openDetail}
-                  morphItemId={morphItemId}
+                  lastOpenedId={lastOpenedId}
                 />
               )}
 
               {page === 'itemDetail' && detailItem && (
                 <ItemDetail
                   item={detailItem}
-                  morph={morphItemId === detailItem.id}
                   onBack={() => nav('overview')}
                   onEdit={item => openItemForm(item)}
                   onDelete={item => confirmDeleteItem(item)}
+                  onExportForm={handleExportItemForm}
+                  onImportForm={item => openImport(item)}
+                  exporting={exporting}
                 />
               )}
             </div>
@@ -630,7 +668,8 @@ export default function ProcurementApp() {
         open={importOpen}
         existingItems={projectItems}
         projectId={activeProject?.id ?? ''}
-        onClose={() => setImportOpen(false)}
+        scopeItem={importScope}
+        onClose={closeImport}
         onConfirm={handleImportConfirm}
         onConfirmVendor={handleVendorImport}
       />

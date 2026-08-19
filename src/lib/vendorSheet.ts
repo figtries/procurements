@@ -4,6 +4,7 @@ import {
   BLACK, CREAM, DATE_FMT, FONT, GREY, INPUT, LEFT, LOCKED, PCT_FMT,
   body, fill, rule, sheetOptions, shortDate,
 } from './excelTheme';
+import { downloadWorkbook } from './download';
 import { FIELD_BY_KEY, type FieldDef, type ItemFieldKey, readField } from './fields';
 import { today } from './procurement';
 
@@ -26,6 +27,14 @@ import { today } from './procurement';
 export const VENDOR_TEMPLATE_MARKER = 'figtries-vendor-template';
 
 export const VENDOR_SHEET = 'Progress Update';
+
+/**
+ * Whether the form covers everything one vendor supplies, or the single item
+ * whose detail screen it was cut from. The sheet is identical either way; the
+ * importer reads this to know what it is allowed to land.
+ */
+export type FormScope = 'vendor' | 'item';
+
 const META_SHEET = '_meta';
 
 const LABEL_COL = 1;
@@ -281,7 +290,7 @@ function writeBody(
  */
 function buildMeta(
   wb: ExcelJS.Workbook, project: Project | null, vendor: string,
-  items: ProcurementItem[], revision: number, layout: Layout,
+  items: ProcurementItem[], revision: number, layout: Layout, scope: FormScope,
 ): void {
   const sheet = wb.addWorksheet(META_SHEET);
   sheet.state = 'veryHidden';
@@ -289,6 +298,7 @@ function buildMeta(
 
   const pairs: Array<[string, string]> = [
     ['marker', VENDOR_TEMPLATE_MARKER],
+    ['scope', scope],
     ['projectId', project?.id ?? ''],
     ['projectName', project?.name ?? ''],
     ['vendor', vendor],
@@ -335,13 +345,13 @@ export function vendorItems(items: ProcurementItem[], vendor: string): Procureme
     .sort((a, b) => a.discipline.localeCompare(b.discipline) || a.desc.localeCompare(b.desc));
 }
 
-export function buildVendorWorkbook(
+function buildForm(
   project: Project | null,
   vendor: string,
-  items: ProcurementItem[],
+  rows: ProcurementItem[],
   revision: number,
+  scope: FormScope,
 ): ExcelJS.Workbook {
-  const rows = vendorItems(items, vendor);
   // One column per item, and at least one so an empty vendor still reads.
   const span = COLON_COL + Math.max(1, rows.length);
 
@@ -390,8 +400,33 @@ export function buildVendorWorkbook(
     autoFilter: false,
   });
 
-  buildMeta(wb, project, vendor, rows, revision, layout);
+  buildMeta(wb, project, vendor, rows, revision, layout, scope);
   return wb;
+}
+
+/** Everything one vendor supplies on this project, one column per item. */
+export function buildVendorWorkbook(
+  project: Project | null,
+  vendor: string,
+  items: ProcurementItem[],
+  revision: number,
+): ExcelJS.Workbook {
+  return buildForm(project, vendor, vendorItems(items, vendor), revision, 'vendor');
+}
+
+/**
+ * One item, on its own sheet.
+ *
+ * Chasing a single piece of equipment is the common errand, and sending the
+ * vendor their whole list to update one column invites edits nobody asked for.
+ * The form is the same one, cut to a single column.
+ */
+export function buildItemWorkbook(
+  project: Project | null,
+  item: ProcurementItem,
+  revision: number,
+): ExcelJS.Workbook {
+  return buildForm(project, item.vendor, [item], revision, 'item');
 }
 
 function safeName(text: string): string {
@@ -405,6 +440,14 @@ export function vendorFileName(
   return `Progress Update ${safeName(vendor)} — ${safeName(project?.name ?? 'All Projects')} rev${rev}.xlsx`;
 }
 
+/** The item's own name leads: this file is about one piece of equipment. */
+export function itemFormFileName(
+  project: Project | null, item: ProcurementItem, revision: number,
+): string {
+  const rev = String(revision).padStart(2, '0');
+  return `Progress Update ${safeName(item.desc)} — ${safeName(item.vendor || 'Vendor')} rev${rev}.xlsx`;
+}
+
 /** Build and download one vendor's workbook. */
 export async function exportVendorWorkbook(
   project: Project | null,
@@ -412,21 +455,20 @@ export async function exportVendorWorkbook(
   items: ProcurementItem[],
 ): Promise<string> {
   const revision = project?.revision ?? 1;
-  const wb = buildVendorWorkbook(project, vendor, items, revision);
-  const fileName = vendorFileName(project, vendor, revision);
+  return downloadWorkbook(
+    buildVendorWorkbook(project, vendor, items, revision),
+    vendorFileName(project, vendor, revision),
+  );
+}
 
-  const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  return fileName;
+/** Build and download the progress form for a single item. */
+export async function exportItemForm(
+  project: Project | null,
+  item: ProcurementItem,
+): Promise<string> {
+  const revision = project?.revision ?? 1;
+  return downloadWorkbook(
+    buildItemWorkbook(project, item, revision),
+    itemFormFileName(project, item, revision),
+  );
 }

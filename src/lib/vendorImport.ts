@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import type { ItemEvent, ProcurementItem } from '@/types';
 import { FIELD_BY_KEY, type ItemFieldKey, VENDOR_FIELDS, readField, writeField } from './fields';
-import { VENDOR_SHEET, VENDOR_TEMPLATE_MARKER } from './vendorSheet';
+import { type FormScope, VENDOR_SHEET, VENDOR_TEMPLATE_MARKER } from './vendorSheet';
 import { deriveStatus } from './procurement';
 import { blockers, validateItem } from './rules';
 import { appendEvents, diffItem } from './itemLog';
@@ -55,6 +55,8 @@ export interface VendorImportResult {
    * than matching on the wording of an error.
    */
   isVendorForm: boolean;
+  /** Whether the form was cut for a whole vendor or for a single item. */
+  scope: FormScope;
   vendor: string;
   projectId: string;
   projectName: string;
@@ -158,9 +160,10 @@ export async function readVendorWorkbook(
   file: File,
   items: ProcurementItem[],
   projectId: string,
+  expectItem?: ProcurementItem | null,
 ): Promise<VendorImportResult> {
   const result: VendorImportResult = {
-    isVendorForm: false,
+    isVendorForm: false, scope: 'vendor',
     vendor: '', projectId: '', projectName: '', generatedAt: '', columns: [], errors: [],
   };
 
@@ -179,6 +182,7 @@ export async function readVendorWorkbook(
   result.isVendorForm = true;
 
   result.vendor = meta.get('vendor') ?? '';
+  result.scope = meta.get('scope') === 'item' ? 'item' : 'vendor';
   result.projectId = meta.get('projectId') ?? '';
   result.projectName = meta.get('projectName') ?? '';
   result.generatedAt = meta.get('generatedAt') ?? '';
@@ -187,6 +191,22 @@ export async function readVendorWorkbook(
     result.errors.push(
       `This form belongs to "${result.projectName || 'another project'}". `
       + 'Switch to that project before importing it.',
+    );
+    return result;
+  }
+
+  /* Read from one item's screen, the file has one item to be about. A form for
+     someone else's equipment is refused outright rather than half-applied: the
+     vendor is asked again, which is cheaper than a date landing on the wrong
+     item and nobody noticing until the truck arrives.
+
+     An item with no vendor recorded is a gap on our side, not the vendor's, so
+     it is left to the column check below — which proves identity outright. */
+  if (expectItem && result.vendor && expectItem.vendor && !sameName(result.vendor, expectItem.vendor)) {
+    result.errors.push(
+      `This form was issued to "${result.vendor}", but "${expectItem.desc}" is supplied by `
+      + `"${expectItem.vendor || '—'}". Check you opened the right item, or ask the vendor to `
+      + 'send back the form for this one.',
     );
     return result;
   }
@@ -300,8 +320,64 @@ export async function readVendorWorkbook(
 
   if (!result.columns.length) {
     result.errors.push('No item columns were found in this form.');
+    return result;
   }
+
+  if (expectItem) {
+    const mine = result.columns.find(c => c.itemId === expectItem.id);
+    if (!mine) {
+      result.errors.push(
+        `This form does not cover "${expectItem.desc}". It covers `
+        + `${describe(result.columns)}. Ask the vendor to send back the progress form `
+        + 'issued for this item.',
+      );
+      return result;
+    }
+
+    const others = result.columns.length - 1;
+    result.columns = [mine];
+
+    /* Identity failed, or the item is gone: nothing here can be applied, so it
+       is stated as an error rather than shown as a card the user cannot tick.
+       Only the reasons it failed are promoted — the note about the rest of the
+       form is an aside, and there is no rest of the form to go back to. */
+    if (mine.blocked && !mine.changes.length) {
+      result.errors.push(...mine.warnings);
+      return result;
+    }
+
+    /* A form cut for the whole vendor still reads here — only the column for
+       this item is kept, and the others are left for the overview import. */
+    if (others > 0) {
+      mine.warnings = [
+        ...mine.warnings,
+        `The form also covers ${others} other item${others === 1 ? '' : 's'}; `
+        + 'import it from the Overview to review those too.',
+      ];
+    }
+  }
+
   return result;
+}
+
+/**
+ * What a form turned out to be about, for an error the reader can act on.
+ *
+ * A vendor form can carry dozens of columns, and naming all of them buries the
+ * sentence that matters in a list nobody reads to the end.
+ */
+function describe(columns: VendorColumn[]): string {
+  const names = columns.map(c => c.desc).filter(Boolean);
+  if (!names.length) return 'other equipment';
+  const shown = names.slice(0, 3).join(', ');
+  const rest = names.length - 3;
+  return rest > 0 ? `${shown} and ${rest} more` : shown;
+}
+
+/** Vendor names travel through Excel and back; case and spacing drift, wording doesn't. */
+function sameName(a: string, b: string): boolean {
+  const norm = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  return norm(a) === norm(b);
 }
 
 function labelOf(key: ItemFieldKey): string {

@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import type { Anomaly, ItemStatus, MilestoneEntry, ProcurementItem, Project } from '@/types';
+import { downloadWorkbook } from './download';
 import {
   STATUS_LABELS, computeDeviation, computeOverallProgress, detectAnomalies,
   disciplineBreakdown, milestoneStats, today, vendorStats,
@@ -746,19 +747,6 @@ export async function exportWorkbook(
   const wb = buildWorkbook(project, items, revision);
   const fileName = exportFileName(project, revision);
 
-  const buffer = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  });
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = fileName;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
+  await downloadWorkbook(wb, fileName);
   return { fileName, revision };
 }

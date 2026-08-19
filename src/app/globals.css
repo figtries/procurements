@@ -285,6 +285,16 @@
     to   { opacity: 0; clip-path: inset(100% 0 0 0); transform: translateY(8px); }
   }
 
+  /* ── The house curve ──
+     Tailwind's default is ease-in-out: it leaves slowly, which is the part
+     that reads as the interface being reluctant. Everything here decelerates
+     instead — quick to leave, slow to land, no overshoot — and does it in
+     one step under two frames longer than the default, which is enough for
+     the eye to see a movement rather than a jump. Same curve the page swaps
+     use, so a hover and a screen change speak the same way. */
+  --default-transition-duration: 180ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -404,45 +414,61 @@
 
 /* ═══════════════════════════════════════════════════════════
    Motion
-   Page, list and tab swaps are driven by React's <ViewTransition>;
-   these rules give the browser the actual animation to run.
+   Page and list swaps are driven by React's <ViewTransition>; these rules
+   give the browser the actual animation to run.
 
-   Four things separate a clean swap from a heavy one:
+   The brief is restraint. This app is a schedule people read, edit and
+   argue with — the motion is here to keep them oriented across a swap, and
+   for nothing else. So every swap is the same short fade with a few pixels
+   of rise under it, and the rules below are mostly about what does *not*
+   happen:
 
+   • Nothing scales, stretches or blurs. A page snapshot is a bitmap a few
+     thousand pixels tall; resampling or filtering one softens every glyph
+     on it for as long as the animation runs, and costs the compositor real
+     work per frame. Opacity and a small translate cost it nothing.
+   • Nothing flies between screens. A thin row and a tall card are not the
+     same shape, and carrying one into the other means watching a bitmap
+     stretch — the showiest thing the app could possibly do, in the middle
+     of the path people walk most often.
    • The shell is not captured. Left named, the document root is snapped
      too, and the browser then stretches one picture of the entire app
      between two very different page heights — sidebar, header and all.
-   • The opacities never share the screen. The outgoing view is gone
-     before the incoming one starts, so you never read one page through
-     the other, which is what left a ghost of the screen you just left.
-   • The travel does overlap, and that is the whole trick. It starts with
-     the transition rather than with the fade, so by the time the new page
-     becomes visible it is already a third of the way through its glide
-     and only the gentle end of the curve is ever seen. Fading in an
-     element that begins its movement from a standstill is what reads as
-     weight; this reads as something that was already on its way.
-   • Nothing scales. A page snapshot is a bitmap a few thousand pixels
-     tall — resampling one softens every glyph on it for as long as the
-     animation runs, which is felt as blur rather than as depth.
+   • The opacities barely share the screen. The outgoing view is down to a
+     tenth before the incoming one starts, so you never read one page
+     through the other — that overlap is a ghost of the screen you just
+     left, and it was worse than the alternative. What is left is only
+     enough to keep bare background from showing between the two.
    ═══════════════════════════════════════════════════════════ */
 
 /* Only the page area animates; everything around it stays live. */
 :root {
   view-transition-name: none;
 
-  /* One vocabulary for every swap. Two clocks on purpose: the fades hand
-     off in sequence, the travel runs long and straight through both. */
-  --vt-out: 110ms;
-  --vt-in: 200ms;
-  --vt-travel: 340ms;
+  /* One vocabulary for every swap, and a short one. This is a tool people
+     work in all day: a transition is here to say the screen changed, not to
+     be watched. Anything long enough to notice twice is long enough to wait
+     on the third time. */
+  --vt-out: 90ms;
+  --vt-in: 150ms;
 
-  /* How far the incoming page travels. Most of it is spent before the page
-     is visible at all, so this reads smaller than it measures. */
-  --vt-rise: 20px;
+  /* When the incoming view starts, measured from the same instant the
+     outgoing one begins leaving.
 
-  /* Slow in, slow out — the only curve here that is ever watched from
-     start to finish, so it gets the one that has no hard edges. */
-  --vt-glide: cubic-bezier(0.4, 0, 0.2, 1);
+     Held back the full length of the exit, the two never touch — and the
+     screen is briefly nothing but background, which is the flicker the swap
+     reads as. Twenty milliseconds of overlap closes that gap while the old
+     view is already down to a tenth of its opacity: too faint to read a
+     second page through, which is the thing the exit is separate for. */
+  --vt-hold: 70ms;
+
+  /* Barely a movement — enough to give the change a direction, not enough
+     to read as travel. */
+  --vt-rise: 8px;
+
+  /* Decelerate into place and stop. No overshoot, no settle: both are things
+     the eye has to follow, and there is nothing here worth following. */
+  --vt-soft: cubic-bezier(0.2, 0, 0, 1);
 }
 
 ::view-transition-group(app-page),
@@ -472,126 +498,59 @@
   mix-blend-mode: normal;
 }
 
-/* Page swap — the outgoing screen steps aside quickly, the incoming one
-   glides the whole length of the transition. */
-::view-transition-old(app-page) {
-  animation:
-    var(--vt-out) ease-out both vt-fade-out,
-    var(--vt-out) ease-out both vt-depart;
-}
-::view-transition-new(app-page) {
-  animation:
-    var(--vt-in) ease-out var(--vt-out) both vt-fade-in,
-    var(--vt-travel) var(--vt-glide) both vt-arrive;
-}
+/* Every swap is the same gesture, whether it changes the whole screen or
+   one list inside it: the old view leaves, then the new one fades up from
+   just below where it will sit. The outgoing view does not move at all —
+   two things travelling in one swap is one more than the eye needs.
 
-/* Lists and the lookahead grid swap inside a page that is standing still,
-   so they travel less and finish sooner. */
+   The exit runs slightly into the entrance rather than finishing first. On
+   paper the handover is cleaner the other way round; on screen it left a
+   frame or two of bare background between the two pages, and a gap in the
+   middle of a movement is exactly what gets read as the button hesitating. */
+::view-transition-old(app-page),
 ::view-transition-old(item-list),
 ::view-transition-old(lookahead) {
-  animation: 90ms ease-out both vt-fade-out;
+  animation: var(--vt-out) ease-out both vt-fade-out;
 }
+::view-transition-new(app-page),
 ::view-transition-new(item-list),
 ::view-transition-new(lookahead) {
   animation:
-    170ms ease-out 90ms both vt-fade-in,
-    260ms var(--vt-glide) both vt-arrive-near;
+    var(--vt-in) ease-out var(--vt-hold) both vt-fade-in,
+    var(--vt-in) var(--vt-soft) var(--vt-hold) both vt-arrive;
 }
 
-@keyframes vt-fade-out    { to   { opacity: 0; } }
-@keyframes vt-fade-in     { from { opacity: 0; } }
-@keyframes vt-depart      { to   { transform: translateY(calc(var(--vt-rise) * -0.4)); } }
-@keyframes vt-arrive      { from { transform: translateY(var(--vt-rise)); } }
-@keyframes vt-arrive-near { from { transform: translateY(10px); } }
-
-/* ── Shared element ──────────────────────────────────────────
-   An item row and the screen it opens are the same object, so the row
-   lifts out of the list and becomes the detail header rather than being
-   replaced by it. Both ends carry the same <ViewTransition name>, and
-   the element is lifted clear of the page snapshot on both sides — it
-   flies over the page it is leaving and lands in the hole waiting for it
-   on the page it is joining.
-
-   The blur across the middle is what makes this work: the two ends are a
-   thin row and a tall card, and interpolating one bitmap into the other
-   is a stretch. Out of focus, a stretch reads as depth of field. In
-   focus, it reads as a smear. */
-::view-transition-group(.morph) {
-  animation-duration: var(--vt-travel);
-  animation-timing-function: var(--vt-glide);
-  z-index: 2;
+/* The list inside a standing page is the one swap that neither leaves nor
+   arrives — the screen does not change, the contents of one box do. So it
+   gets the same gesture with the travel taken out and the two halves laid
+   almost on top of each other: no rise to follow, and barely a gap between
+   the old set going and the new one coming. What is left reads as the list
+   settling rather than as a beat of waiting after the click. */
+::view-transition-old(item-list) {
+  animation-duration: 60ms;
 }
-::view-transition-image-pair(.morph) {
-  isolation: auto;
-  animation: var(--vt-travel) ease-in-out both vt-morph-focus;
-}
-::view-transition-old(.morph),
-::view-transition-new(.morph) {
-  mix-blend-mode: normal;
-  animation-duration: var(--vt-travel);
-  animation-timing-function: ease-in-out;
-}
-@keyframes vt-morph-focus {
-  0%, 100% { filter: blur(0); }
-  40%      { filter: blur(4px); }
+::view-transition-new(item-list) {
+  animation-name: vt-fade-in;
+  animation-duration: 120ms;
+  animation-delay: 40ms;
 }
 
-/* ── Paged list slides ───────────────────────────────────────
-   The pages of a group card ride a native scroll-snap track, so the swipe
-   itself is already the compositor's work. This gives that swipe depth
-   without taking any of it back: the page being left behind settles and
-   dims while the one arriving comes forward.
-
-   The timeline is the scroll position, not a clock, so the movement is the
-   finger's — it follows at whatever speed the hand chooses, turns around
-   mid-swipe if the hand does, and holds still when the hand stops. A
-   duration-based animation can only guess at that after the fact.
-
-   Behind @supports because a browser without scroll-driven animations must
-   not fall back to running these keyframes on a timer: it would play them
-   once at load and leave every page but one dimmed. Those browsers get the
-   plain snap, which is smooth already — the effect is a bonus, never the
-   thing holding the page together. */
-@supports (animation-timeline: view(inline)) {
-  @media (prefers-reduced-motion: no-preference) {
-    .slide-depth {
-      animation-name: slide-depth;
-      animation-timing-function: linear;
-      animation-fill-mode: both;
-      /* No duration: on a view timeline `auto` spans the whole range. */
-      animation-timeline: view(inline);
-    }
-  }
-}
-
-/* A page sits at the midpoint while it holds the frame, so the resting
-   state is a plain untransformed page — full opacity, no scaling, text
-   rasterised as crisply as it was before any of this. */
-@keyframes slide-depth {
-  0%, 100% { opacity: 0.45; transform: scale(0.96); }
-  50%      { opacity: 1;    transform: none; }
-}
+@keyframes vt-fade-out { to   { opacity: 0; } }
+@keyframes vt-fade-in  { from { opacity: 0; } }
+@keyframes vt-arrive   { from { transform: translateY(var(--vt-rise)); } }
 
 @media (prefers-reduced-motion: reduce) {
   /* Keep the hand-off — it is what says the screen changed — but drop the
      travel and most of the wait. */
   ::view-transition-old(*) {
     animation-name: vt-fade-out !important;
-    animation-duration: 90ms !important;
+    animation-duration: var(--vt-out) !important;
     animation-delay: 0s !important;
   }
   ::view-transition-new(*) {
     animation-name: vt-fade-in !important;
-    animation-duration: 110ms !important;
-    animation-delay: 90ms !important;
-  }
-  /* A morph is travel by definition, so it does not survive this at all —
-     the row and the header simply cross-fade where they each already are. */
-  ::view-transition-group(.morph) {
-    animation: none !important;
-  }
-  ::view-transition-image-pair(.morph) {
-    animation: none !important;
+    animation-duration: var(--vt-in) !important;
+    animation-delay: var(--vt-hold) !important;
   }
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -1,6 +1,6 @@
 'use client';
 
-import { ViewTransition, useTransition } from 'react';
+import { ViewTransition, startTransition, useEffect, useState, useTransition } from 'react';
 import {
   ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Clock, PackageSearch, Plus, Search,
   TriangleAlert, X,
@@ -12,8 +12,8 @@ import GroupCard from './GroupCard';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
-  DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
   Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle,
@@ -39,9 +39,9 @@ interface OverviewPageProps {
   uniqueDiscs: string[];
   uniqueVendors: string[];
   hasProject: boolean;
-  /** The row the detail screen was last opened from; it morphs into that
-   *  screen and back rather than fading with the rest of the page. */
-  morphItemId: string | null;
+  /** The row the detail screen was last opened from; the group it lives in
+   *  reopens on whichever of its pages holds it. */
+  lastOpenedId: string | null;
   onSearch: (v: string) => void;
   onFilterStatus: (v: string) => void;
   onFilterDisc: (v: string) => void;
@@ -54,6 +54,14 @@ interface OverviewPageProps {
   onAddItem: () => void;
   onOpenDetail: (item: ProcurementItem) => void;
 }
+
+/**
+ * Groups built before the screen is handed over.
+ *
+ * Three fills the tallest screen this is used on with one to spare; a fourth
+ * would be paid for on every arrival and seen on none of them.
+ */
+const EAGER_GROUPS = 3;
 
 /**
  * Base UI renders a select's raw value unless the root is given an item map,
@@ -159,11 +167,36 @@ function WarnBanners({
 export default function OverviewPage({
   projectItems, filteredItems, grouped, groupBy, search,
   filterStatus, filterDisc, filterVendor, hasFilters, uniqueDiscs, uniqueVendors,
-  hasProject, morphItemId, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
+  hasProject, lastOpenedId, onSearch, onFilterStatus, onFilterDisc, onFilterVendor,
   onClearFilters, onImport, onExport, onExportVendor, exporting, onAddItem, onOpenDetail,
 }: OverviewPageProps) {
   /** Filtering runs in a transition so the list crossfades instead of snapping. */
   const [, startFilter] = useTransition();
+
+  /** Whether the groups below the fold have been built yet.
+   *
+   *  A page swap cannot start until React has rendered the screen it is
+   *  swapping to, so everything this page builds up front is time the Back
+   *  button spends doing nothing. Measured on the way back from an item, the
+   *  whole list cost between a fifth and half a second of that — the pause
+   *  people read as the button being slow to respond.
+   *
+   *  Only the top of the page can be seen when it arrives, so only the top of
+   *  it has to exist by then. The rest is built on the next task, while the
+   *  swap is still animating, and lands far below the fold long before anyone
+   *  can scroll to it. Each group already defers the pages of its own pager
+   *  the same way. */
+  const [warmGroups, setWarmGroups] = useState(false);
+
+  useEffect(() => {
+    // A timer, not `requestIdleCallback`: idle callbacks are scheduled against
+    // frames, so a tab that is not drawing would never build the rest of the
+    // list at all. Landing in a second task is the whole point, and any
+    // timeout does that. Non-urgent, so React may slice the work and keep the
+    // list it just handed over responsive while the rest fills in.
+    const id = window.setTimeout(() => startTransition(() => setWarmGroups(true)), 0);
+    return () => window.clearTimeout(id);
+  }, []);
 
   const total   = projectItems.length;
   const onsite  = projectItems.filter(i => i.status === 'onsite').length;
@@ -178,8 +211,15 @@ export default function OverviewPage({
       .map(([value, label]) => ({ value, label })),
   ];
 
-  /** Key changes whenever the visible set does, which drives the crossfade. */
-  const listKey = `${groupBy}|${filterStatus}|${filterDisc}|${filterVendor}|${search}`;
+  /** Key changes whenever a filter does, which drives the crossfade.
+   *
+   *  Search is deliberately not part of it. A key change snapshots the whole
+   *  list and animates it, and typing changes the key on every keystroke — so
+   *  one word typed into the box queued half a dozen crossfades back to back,
+   *  each interrupting the last. That is the drag the filter bar has. Typing
+   *  now narrows the list in place; only the pickers, one deliberate change
+   *  at a time, are worth a crossfade. */
+  const listKey = `${groupBy}|${filterStatus}|${filterDisc}|${filterVendor}`;
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -227,14 +267,19 @@ export default function OverviewPage({
                 Project workbook
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>Vendor progress form</DropdownMenuLabel>
-              <div className="max-h-64 overflow-y-auto">
-                {uniqueVendors.map(vendor => (
-                  <DropdownMenuItem key={vendor} onClick={() => onExportVendor(vendor)}>
-                    <span className="truncate">{vendor}</span>
-                  </DropdownMenuItem>
-                ))}
-              </div>
+              {/* The label belongs to the vendor list, and the menu reads that
+                  from the group around them. Left loose in the popup it has no
+                  group to label, and it takes the whole tab down with it. */}
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>Vendor progress form</DropdownMenuLabel>
+                <div className="max-h-64 overflow-y-auto">
+                  {uniqueVendors.map(vendor => (
+                    <DropdownMenuItem key={vendor} onClick={() => onExportVendor(vendor)}>
+                      <span className="truncate">{vendor}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button size="lg" className="min-w-0 flex-1 sm:flex-none" onClick={onAddItem}>
@@ -321,8 +366,8 @@ export default function OverviewPage({
 
           {hasFilters && (
             <Button
-              variant="ghost" size="sm"
-              className="col-span-2 justify-self-start text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95"
+              variant="ghost"
+              className="col-span-2 justify-self-start text-muted-foreground motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150"
               onClick={() => startFilter(onClearFilters)}
             >
               <X />
@@ -370,12 +415,12 @@ export default function OverviewPage({
             </Empty>
           ) : (
             <div className="space-y-3 sm:space-y-4">
-              {grouped.map(group => (
+              {grouped.map((group, i) => (warmGroups || i < EAGER_GROUPS) && (
                 <GroupCard
                   key={group.key}
                   group={group}
                   groupBy={groupBy}
-                  morphItemId={morphItemId}
+                  lastOpenedId={lastOpenedId}
                   onOpenDetail={onOpenDetail}
                 />
               ))}

@@ -1,8 +1,8 @@
 'use client';
 
-import { ViewTransition } from 'react';
 import {
-  ArrowLeft, Clock, MessageCircle, Package, Pencil, ShieldAlert, Trash2, TriangleAlert,
+  ArrowDownToLine, ArrowLeft, ArrowUpFromLine, Clock, FileSpreadsheet, MessageCircle,
+  Package, Pencil, ShieldAlert, Trash2, TriangleAlert,
 } from 'lucide-react';
 import type { ProcurementItem } from '@/types';
 import { fmtDate, waLink } from '@/lib/procurement';
@@ -14,20 +14,24 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Spinner } from '@/components/ui/spinner';
 import UpdateLog from './UpdateLog';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
 interface ItemDetailProps {
   item: ProcurementItem;
-  /** True when this screen was opened from its row in the overview list, and
-   *  that row is therefore still on screen to fly from. Deleting the item, or
-   *  arriving here any other way, leaves nothing to morph and the card enters
-   *  with the page instead. */
-  morph?: boolean;
   onBack: () => void;
   onEdit: (item: ProcurementItem) => void;
   onDelete: (item: ProcurementItem) => void;
+  /** Cut this one item's progress form for its vendor. */
+  onExportForm: (item: ProcurementItem) => void;
+  /** Read a returned form back — this item's form only. */
+  onImportForm: (item: ProcurementItem) => void;
+  exporting: boolean;
 }
 
 /** Vendors send several delivery orders per item, separated any which way. */
@@ -44,29 +48,6 @@ const READINESS_TONES = {
   mid:  { value: 'text-atrisk-fg',  rail: 'bg-atrisk' },
   full: { value: 'text-ok-fg',      rail: 'bg-ok' },
 } as const;
-
-/**
- * Gives its child a shared identity when there is a row waiting on the other
- * side, and stays out of the way when there is not.
- *
- * Naming it unconditionally would be worse than not naming it at all: a named
- * element is lifted out of the page snapshot whether or not anything matches
- * it, so on a screen reached with no row to fly from the card would simply be
- * missing from the page as it fades in.
- */
-function Morph({ on, name, children }: {
-  on?: boolean;
-  name: string;
-  children: React.ReactNode;
-}) {
-  if (!on) return children;
-  // `default="none"` keeps it still during transitions it is not part of.
-  return (
-    <ViewTransition name={name} share="morph" default="none">
-      {children}
-    </ViewTransition>
-  );
-}
 
 /** A headline figure over its own rail — used for progress and readiness. */
 function Meter({
@@ -99,7 +80,9 @@ function Meter({
   );
 }
 
-export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: ItemDetailProps) {
+export default function ItemDetail({
+  item, onBack, onEdit, onDelete, onExportForm, onImportForm, exporting,
+}: ItemDetailProps) {
   const isLate   = item.status === 'late';
   const isAtRisk = item.status === 'atrisk';
 
@@ -180,97 +163,126 @@ export default function ItemDetail({ item, morph, onBack, onEdit, onDelete }: It
         </Alert>
       )}
 
-      {/* ── Identity, progress and specification ──
-          This card is the other end of the row that was clicked: same name,
-          so the browser carries one between the two instead of dissolving
-          one and building the other. */}
-      <Morph on={morph} name={`item-${item.id}`}>
-        <Card className="gap-0 py-0">
-          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
-            <div className="min-w-0 space-y-2.5">
-              {/* Discipline leads, status follows — what the item *is* before how
-                  it is doing. The title carries the description on its own. */}
-              <div className="flex flex-wrap items-center gap-2">
-                <DisciplineBadge discipline={item.discipline} />
-                <StatusBadge status={item.status} />
-              </div>
-              <h1 className="font-heading text-xl leading-tight font-semibold tracking-tight text-balance sm:text-2xl">
-                {item.desc}
-              </h1>
+      {/* ── Identity, progress and specification ── */}
+      <Card className="gap-0 py-0">
+        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+          <div className="min-w-0 space-y-2.5">
+            {/* Discipline leads, status follows — what the item *is* before how
+                it is doing. The title carries the description on its own. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <DisciplineBadge discipline={item.discipline} />
+              <StatusBadge status={item.status} />
             </div>
-
-            {/* Side by side and full width on a phone, so neither action ends up
-                as a lone stub on its own line — but with air between them, the
-                way the toolbar on the overview reads. */}
-            <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:gap-2.5">
-              <Button
-                variant="outline" size="lg"
-                className="flex-1 sm:flex-none"
-                onClick={() => onEdit(item)}
-              >
-                <Pencil />
-                Edit
-              </Button>
-              <Button
-                variant="outline" size="lg"
-                className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-none"
-                onClick={() => onDelete(item)}
-              >
-                <Trash2 />
-                Delete
-              </Button>
-            </div>
+            <h1 className="font-heading text-xl leading-tight font-semibold tracking-tight text-balance sm:text-2xl">
+              {item.desc}
+            </h1>
           </div>
 
-          <div className="grid gap-5 border-t p-4 sm:grid-cols-2 sm:gap-6 sm:p-5">
-            <Meter
-              label="Overall Progress"
-              caption="Manufacturing, FAT, RTS and delivery"
-              pct={item.progress}
-            />
-            <Meter
-              label="Document Readiness"
-              caption="Vendor document completeness"
-              pct={readinessPct}
-              valueClassName={readinessTone.value}
-              railClassName={readinessTone.rail}
-            />
-          </div>
+          {/* Side by side and full width on a phone, so neither action ends up
+              as a lone stub on its own line — but with air between them, the
+              way the toolbar on the overview reads.
 
-          {/* A hairline grid keeps eight fields legible without eight boxes. */}
-          <dl className="grid grid-cols-2 gap-px border-t bg-border md:grid-cols-4">
-            {fields.map(f => (
-              <div key={f.label} className="min-w-0 bg-card px-4 py-3 sm:px-5">
-                <dt className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-                  {f.label}
-                </dt>
-                {/* DO numbers and contract references run long and have no spaces
-                    to break on — let them wrap mid-token. */}
-                <dd className={cn(
-                  'mt-1 text-sm font-medium break-words',
-                  !f.value && 'text-muted-foreground',
-                )}>
-                  {/* The number is the one field here worth making actionable:
-                      chasing a vendor starts with a message, not a copy-paste. */}
-                  {f.value && f.wa ? (
-                    <a
-                      href={f.wa}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-4 hover:text-ok-fg"
-                    >
-                      <MessageCircle className="size-3.5" />
-                      {f.value}
-                    </a>
-                  ) : (
-                    f.value || '—'
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
-      </Morph>
+              The sheet is one control rather than two buttons: sending it and
+              reading it back are the two ends of one errand, and Edit and
+              Delete are what the eye is looking for up here. On a phone it
+              takes the first line and lets the pair below stay a pair. */}
+          <div className="flex w-full shrink-0 flex-wrap items-center gap-2 sm:w-auto sm:gap-2.5">
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline" size="lg"
+                    className="w-full min-w-0 sm:w-auto"
+                    disabled={exporting}
+                  />
+                }
+              >
+                {exporting ? <Spinner /> : <FileSpreadsheet />}
+                <span className="truncate">
+                  {/* Room for the whole label here: this control has a line to
+                      itself on a phone, where the overview toolbar has to fit
+                      three buttons across and drops the word “Excel”. */}
+                  {exporting ? 'Preparing…' : 'Update Excel'}
+                </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem onClick={() => onExportForm(item)}>
+                  <ArrowUpFromLine />
+                  Export form for this item
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onImportForm(item)}>
+                  <ArrowDownToLine />
+                  Import returned form
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button
+              variant="outline" size="lg"
+              className="flex-1 sm:flex-none"
+              onClick={() => onEdit(item)}
+            >
+              <Pencil />
+              Edit
+            </Button>
+            <Button
+              variant="outline" size="lg"
+              className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive sm:flex-none"
+              onClick={() => onDelete(item)}
+            >
+              <Trash2 />
+              Delete
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid gap-5 border-t p-4 sm:grid-cols-2 sm:gap-6 sm:p-5">
+          <Meter
+            label="Overall Progress"
+            caption="Manufacturing, FAT, RTS and delivery"
+            pct={item.progress}
+          />
+          <Meter
+            label="Document Readiness"
+            caption="Vendor document completeness"
+            pct={readinessPct}
+            valueClassName={readinessTone.value}
+            railClassName={readinessTone.rail}
+          />
+        </div>
+
+        {/* A hairline grid keeps eight fields legible without eight boxes. */}
+        <dl className="grid grid-cols-2 gap-px border-t bg-border md:grid-cols-4">
+          {fields.map(f => (
+            <div key={f.label} className="min-w-0 bg-card px-4 py-3 sm:px-5">
+              <dt className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+                {f.label}
+              </dt>
+              {/* DO numbers and contract references run long and have no spaces
+                  to break on — let them wrap mid-token. */}
+              <dd className={cn(
+                'mt-1 text-sm font-medium break-words',
+                !f.value && 'text-muted-foreground',
+              )}>
+                {/* The number is the one field here worth making actionable:
+                    chasing a vendor starts with a message, not a copy-paste. */}
+                {f.value && f.wa ? (
+                  <a
+                    href={f.wa}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 underline decoration-dotted underline-offset-4 hover:text-ok-fg"
+                  >
+                    <MessageCircle className="size-3.5" />
+                    {f.value}
+                  </a>
+                ) : (
+                  f.value || '—'
+                )}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </Card>
 
       {/* ── Schedule beside the paperwork ── */}
       <div className="grid items-start gap-4 lg:grid-cols-2">

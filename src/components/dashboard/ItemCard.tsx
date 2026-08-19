@@ -1,4 +1,3 @@
-import { ViewTransition } from 'react';
 import {
   ChevronRight, CircleDashed, Clock, PackageCheck, TrendingUp, TriangleAlert,
   type LucideIcon,
@@ -18,10 +17,6 @@ interface ItemCardProps {
   /** The heading already names whatever the list is grouped on, so the row
    *  does not repeat it. */
   groupBy?: GroupBy;
-  /** This is the row the detail screen was opened from, so it is the row
-   *  that flies there and back rather than fading with the rest of the
-   *  page. Only ever true of one row at a time. */
-  morph?: boolean;
   onClick: () => void;
 }
 
@@ -34,7 +29,7 @@ const STATUS_ICON: Record<ItemStatus, LucideIcon> = {
   onsite:   PackageCheck,
 };
 
-export default function ItemCard({ item, groupBy, morph, onClick }: ItemCardProps) {
+export default function ItemCard({ item, groupBy, onClick }: ItemCardProps) {
   const nextMile  = getNextMilestone(item);
   const status    = STATUS_CLASSES[item.status];
   const Icon      = STATUS_ICON[item.status];
@@ -117,14 +112,5 @@ export default function ItemCard({ item, groupBy, morph, onClick }: ItemCardProp
     </Item>
   );
 
-  // `default="none"` keeps the row still during the swaps it is not part of —
-  // a filter change, a regroup — where it would otherwise animate itself
-  // alongside the list it lives in.
-  return morph
-    ? (
-      <ViewTransition name={`item-${item.id}`} share="morph" default="none">
-        {row}
-      </ViewTransition>
-    )
-    : row;
+  return row;
 }

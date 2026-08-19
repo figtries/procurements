@@ -28,6 +28,12 @@ interface ImportModalProps {
   existingItems: ProcurementItem[];
   /** Guards a vendor form returned against a different project. */
   projectId: string;
+  /**
+   * Set when the dialog was opened from one item's screen: only that item's
+   * progress form is accepted, and anything else is refused with a reason to
+   * send the vendor.
+   */
+  scopeItem?: ProcurementItem | null;
   onClose: () => void;
   onConfirm: (rows: ImportedRow[]) => void;
   onConfirmVendor: (result: VendorImportResult, columns: VendorColumn[]) => void;
@@ -48,7 +54,7 @@ const CHANGE_TONE: Record<string, string> = {
 };
 
 export default function ImportModal({
-  open, existingItems, projectId, onClose, onConfirm, onConfirmVendor,
+  open, existingItems, projectId, scopeItem, onClose, onConfirm, onConfirmVendor,
 }: ImportModalProps) {
   const [result, setResult]     = useState<ImportResult | null>(null);
   const [vendor, setVendor]     = useState<VendorImportResult | null>(null);
@@ -79,9 +85,22 @@ export default function ImportModal({
     try {
       // A vendor form carries our own marker, so it is offered to that reader
       // first; anything else falls through to the header-guessing importer.
-      const asVendor = await readVendorWorkbook(file, existingItems, projectId);
+      const asVendor = await readVendorWorkbook(file, existingItems, projectId, scopeItem);
       if (asVendor.isVendorForm) {
         setVendor(asVendor);
+        return;
+      }
+      // From one item's screen there is nothing sensible to do with a schedule
+      // full of other equipment — the row-guessing importer would offer to add
+      // items, which is not what this button is for.
+      if (scopeItem) {
+        setResult({
+          rows: [], sheetsRead: [],
+          errors: [
+            'This is not the progress form for this item. Ask the vendor to send back the '
+            + 'file that was issued to them, or use Import on the Overview for a full schedule.',
+          ],
+        });
         return;
       }
       setResult(await importWorkbook(file, existingItems));
@@ -117,6 +136,12 @@ export default function ImportModal({
   const duplicates      = rows.filter(r => r.duplicateOf !== undefined).length;
   const needsDiscipline = selected.filter(r => !r.discipline).length;
 
+  /** The file was refused outright: there is nothing to review, only a reason. */
+  const stuck = (vendor?.errors.length ?? 0) > 0
+    || ((result?.errors.length ?? 0) > 0 && rows.length === 0);
+  /** A vendor form that got as far as being readable. */
+  const reviewing = !!vendor && !vendor.errors.length;
+
   const setAll = (include: boolean) => {
     setResult(prev => prev && {
       ...prev,
@@ -129,13 +154,23 @@ export default function ImportModal({
     <Dialog open={open} onOpenChange={next => { if (!next) close(); }}>
       <DialogContent className="flex max-h-[85svh] flex-col gap-0 overflow-hidden p-0 sm:max-h-[90svh] sm:max-w-5xl">
         <DialogHeader className="shrink-0 p-4 pb-3">
-          <DialogTitle>{vendor ? 'Vendor progress update' : 'Import from Excel'}</DialogTitle>
+          {/* A refused form is not a progress update, whatever it was cut as —
+              while the error stands, the dialog keeps the heading it opened
+              with rather than announcing a review that never happened. */}
+          <DialogTitle>
+            {reviewing ? 'Vendor progress update'
+              : scopeItem ? 'Import progress form'
+                : 'Import from Excel'}
+          </DialogTitle>
           <DialogDescription>
-            {vendor
+            {reviewing
               ? 'Only the cells the vendor was asked to fill are read. A blank cell means '
                 + 'no news, so nothing you already have is cleared.'
-              : 'Every sheet is read, header rows are detected, and disciplines are split '
-                + 'out of section rows such as “A. ELECTRICAL”.'}
+              : scopeItem
+                ? `Only the form issued for “${scopeItem.desc}” is accepted here. A form for `
+                  + 'another item, or from another vendor, is refused rather than half-applied.'
+                : 'Every sheet is read, header rows are detected, and disciplines are split '
+                  + 'out of section rows such as “A. ELECTRICAL”.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -321,6 +356,18 @@ export default function ImportModal({
             </div>
           ))}
 
+          {/* A refused file used to leave the dialog with nothing on it but the
+              reason — the drop zone is gone by then, so the only way back was
+              to cancel and start again. */}
+          {stuck && (
+            <div className="flex justify-center">
+              <Button variant="outline" onClick={reset}>
+                <Upload />
+                Choose another file
+              </Button>
+            </div>
+          )}
+
           {/* ── Preview ── */}
           {result && rows.length > 0 && (
             <>
@@ -476,7 +523,9 @@ export default function ImportModal({
 
         <DialogFooter className="m-0 shrink-0 rounded-none">
           <Button variant="outline" onClick={close}>Cancel</Button>
-          {vendor ? (
+          {/* Nothing came through: an Apply button that can never be pressed
+              only invites the reader to look for what would enable it. */}
+          {stuck ? null : vendor ? (
             <Button
               disabled={!vendorChanges}
               onClick={() => { onConfirmVendor(vendor, vendorSelected); reset(); }}
