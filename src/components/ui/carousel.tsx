@@ -148,64 +148,83 @@ function Carousel({
 }
 
 function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
-  const { carouselRef, orientation, api } = useCarousel()
+  const { carouselRef, orientation } = useCarousel()
   const containerRef = React.useRef<HTMLDivElement>(null)
 
-  // A drag is only cheap once the slides are rasterised. The container is
-  // promoted to its own layer for the length of the gesture and let go again
-  // when the carousel settles: a page carrying one carousel per group cannot
-  // afford to hold a layer open for every one of them at rest.
+  // A slide is only cheap once the pages either side of it have been painted.
+  //
+  // They are in the tree well before anyone reaches for an arrow, but being in
+  // the tree is not being painted: a page waiting its turn sits outside the
+  // track's overflow, and nothing outside an overflow is drawn until it is
+  // brought in. So the first press of an arrow asks the browser to paint five
+  // fresh rows — an icon, a badge and a progress bar apiece — in the same
+  // frames it is animating the movement, and those are the frames that drop.
+  //
+  // This is the whole of the difference between this carousel and the one on
+  // the dashboard, which is the same component with the same options and has
+  // always been smooth: its pages hold four short discipline lines where these
+  // hold five full rows of the list.
+  //
+  // Promoting the track to its own layer is what gets them painted ahead of
+  // the press, and the question is only when to ask. On the pointer going down
+  // it is a fifth of a second of notice, on a phone, for three pages of rows —
+  // which is the press paying for the paint after all, just slightly earlier.
+  // While the card is on screen there is no hurry at all: by the time an arrow
+  // can be reached, the pages behind it have long since been drawn.
+  //
+  // Bounded by the same observer that grants it. A page carrying one of these
+  // per group cannot hold a layer open for every one of them, so the layer
+  // lives exactly as long as the card is somewhere near the screen — one or
+  // two groups at a time on a phone — and is given back on the way out.
   React.useEffect(() => {
-    if (!api) return
     const el = containerRef.current
     if (!el) return
 
-    const lift = () => {
-      el.style.willChange = "transform"
+    // Two reasons to hold the layer, and it is held while either stands.
+    // Visibility is the one that does the work; the press is a fallback for
+    // the moment before the observer has had a chance to speak, and for any
+    // browser where it never does.
+    let onScreen = false
+    let pressed: ReturnType<typeof setTimeout> | null = null
+    const sync = () => {
+      el.style.willChange = onScreen || pressed ? "transform" : ""
     }
-    const drop = () => {
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        onScreen = entry.isIntersecting
+        sync()
+      },
+      // A margin either side, so the painting is done while the card is still
+      // on its way up rather than in the moment it lands.
+      { rootMargin: "300px 0px" }
+    )
+    io.observe(el)
+
+    // A pointer going down on an arrow is a beat ahead of the click it
+    // becomes. Released on a timer rather than on "settle", so a touch that
+    // moves nothing cannot leave the layer standing for good — which is what
+    // an event about movement would do.
+    const root = el.closest<HTMLElement>('[data-slot="carousel"]')
+    const press = (e: Event) => {
+      const target = e.target as Element | null
+      if (!target?.closest('[data-slot="carousel-previous"],[data-slot="carousel-next"]')) return
+      if (pressed) clearTimeout(pressed)
+      pressed = setTimeout(() => {
+        pressed = null
+        sync()
+      }, 1200)
+      sync()
+    }
+    root?.addEventListener("pointerdown", press, { passive: true })
+
+    return () => {
+      io.disconnect()
+      root?.removeEventListener("pointerdown", press)
+      if (pressed) clearTimeout(pressed)
       el.style.willChange = ""
     }
-
-    // A finger going down anywhere on the carousel — on the track or on an
-    // arrow — is the earliest warning that it is about to move, and the layer
-    // wants making before the movement starts rather than in the same frame
-    // as its first step. Asked for as the slide begins, the browser rasters a
-    // track three pages wide while it is already animating, and that is the
-    // hitch a tap on the arrow had on a phone. A pointer going down is a beat
-    // ahead of the click it becomes, which is all the notice this needs.
-    //
-    // Arrows only. A layer is given up again on "settle", which is an event
-    // about movement — so promoting on a touch that never moves anything, a
-    // tap on a row of the list inside, would leave that carousel holding a
-    // layer for good. An arrow is the one place a pointer going down always
-    // means a slide: at either end of the track the button is disabled, and a
-    // disabled button is not pressed.
-    //
-    // The listener sits on the carousel's own element rather than on the
-    // arrows, because the arrows are outside the track — here they sit up in
-    // the card's heading — and the element that holds both is given no box of
-    // its own, but is still in the tree for events to pass through.
-    const root = el.closest<HTMLElement>('[data-slot="carousel"]')
-    const liftForArrow = (e: Event) => {
-      const target = e.target as Element | null
-      if (target?.closest('[data-slot="carousel-previous"],[data-slot="carousel-next"]')) lift()
-    }
-    root?.addEventListener("pointerdown", liftForArrow, { passive: true })
-
-    // `select` is the fallback for every way it moves without a pointer: the
-    // arrow keys, or a page asked for in code.
-    api.on("pointerDown", lift)
-    api.on("select", lift)
-    api.on("settle", drop)
-    return () => {
-      root?.removeEventListener("pointerdown", liftForArrow)
-      api.off("pointerDown", lift)
-      api.off("select", lift)
-      api.off("settle", drop)
-      drop()
-    }
-  }, [api])
+  }, [])
 
   return (
     <div
