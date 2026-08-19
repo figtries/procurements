@@ -479,6 +479,7 @@ export default function OverviewPage({
                   group={group}
                   groupBy={groupBy}
                   lastOpenedId={lastOpenedId}
+                  wide={wideRows}
                   onOpenDetail={onOpenDetail}
                 />
               ))}

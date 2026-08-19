@@ -21,6 +21,8 @@ interface GroupCardProps {
   /** The row the detail screen was last opened from, wherever it happens to
    *  sit — the pager opens on whichever page holds it. */
   lastOpenedId?: string | null;
+  /** Passed through to the rows: which of the two row arrangements to build. */
+  wide?: boolean;
   onOpenDetail: (item: ProcurementItem) => void;
 }
 
@@ -73,9 +75,10 @@ function Heading({ group, groupBy, children }: {
  * down here is the same array until the group itself changes, and every page
  * but the heading bails out.
  */
-const Rows = memo(function Rows({ items, groupBy, onOpenDetail }: {
+const Rows = memo(function Rows({ items, groupBy, wide, onOpenDetail }: {
   items: ProcurementItem[];
   groupBy: GroupBy;
+  wide?: boolean;
   onOpenDetail: (item: ProcurementItem) => void;
 }) {
   return (
@@ -85,6 +88,7 @@ const Rows = memo(function Rows({ items, groupBy, onOpenDetail }: {
           key={item.id}
           item={item}
           groupBy={groupBy}
+          wide={wide}
           onOpen={onOpenDetail}
         />
       ))}
@@ -92,7 +96,7 @@ const Rows = memo(function Rows({ items, groupBy, onOpenDetail }: {
   );
 });
 
-function GroupCard({ group, groupBy, lastOpenedId, onOpenDetail }: GroupCardProps) {
+function GroupCard({ group, groupBy, lastOpenedId, wide, onOpenDetail }: GroupCardProps) {
   const pages = useMemo(() => paginate(group.items), [group.items]);
 
   // Short groups stay a plain list: a pager that can never move would only add
@@ -104,6 +108,7 @@ function GroupCard({ group, groupBy, lastOpenedId, onOpenDetail }: GroupCardProp
         <Rows
           items={group.items}
           groupBy={groupBy}
+          wide={wide}
           onOpenDetail={onOpenDetail}
         />
       </Card>
@@ -120,6 +125,7 @@ function GroupCard({ group, groupBy, lastOpenedId, onOpenDetail }: GroupCardProp
         group={group}
         groupBy={groupBy}
         lastOpenedId={lastOpenedId}
+        wide={wide}
         onOpenDetail={onOpenDetail}
       />
     </Card>
@@ -145,11 +151,12 @@ export default memo(GroupCard);
  * duration grows with the distance it is given. A page width bought most of
  * half a second of slow ease-in-out, and that was the weight.
  */
-function Pager({ pages, group, groupBy, lastOpenedId, onOpenDetail }: {
+function Pager({ pages, group, groupBy, lastOpenedId, wide, onOpenDetail }: {
   pages: ProcurementItem[][];
   group: GroupCardProps['group'];
   groupBy: GroupBy;
   lastOpenedId?: string | null;
+  wide?: boolean;
   onOpenDetail: (item: ProcurementItem) => void;
 }) {
   const [api, setApi] = useState<CarouselApi>();
@@ -240,7 +247,7 @@ function Pager({ pages, group, groupBy, lastOpenedId, onOpenDetail }: {
                 full by definition, so it sets the card's height from the
                 first paint, and it costs a single extra row. */}
             {(warm || p === startIndex || p === 0) && (
-              <Rows items={pageItems} groupBy={groupBy} onOpenDetail={onOpenDetail} />
+              <Rows items={pageItems} groupBy={groupBy} wide={wide} onOpenDetail={onOpenDetail} />
             )}
           </CarouselItem>
         ))}

@@ -18,6 +18,14 @@ interface ItemCardProps {
   /** The heading already names whatever the list is grouped on, so the row
    *  does not repeat it. */
   groupBy?: GroupBy;
+  /** Whether this row is being drawn in its wide form.
+   *
+   *  Read once for the whole list and handed down rather than asked for by
+   *  each row: one media query answers for all eighty-eight of them. The
+   *  classes below still carry their own `md:` rules, so the breakpoint, not
+   *  this flag, remains what decides whether a thing is seen — the flag only
+   *  decides whether it is built. */
+  wide?: boolean;
   /** Takes the item rather than a closure over it: a fresh arrow written at
    *  the call site would be a new prop on every render of the list, and the
    *  memo below would never once hold. */
@@ -59,7 +67,7 @@ const STATUS_STYLE = Object.fromEntries(
   }]),
 ) as Record<ItemStatus, { chip: string; rail: string }>;
 
-function ItemCard({ item, groupBy, onOpen }: ItemCardProps) {
+function ItemCard({ item, groupBy, wide, onOpen }: ItemCardProps) {
   const nextMile  = getNextMilestone(item);
   const status    = STATUS_STYLE[item.status];
   const Icon      = STATUS_ICON[item.status];
@@ -93,7 +101,12 @@ function ItemCard({ item, groupBy, onOpen }: ItemCardProps) {
       </ItemContent>
 
       {/* Vendor, progress and state each take a column once there is room for
-          one; below md they fold onto the footer line rather than disappear. */}
+          one; below md they fold onto the footer line rather than disappear.
+          Only one of the two arrangements is built. Both used to be, and the
+          unused one was fifteen nodes of every row — near a thousand across
+          the list — created, styled and kept for a width that was not on the
+          screen. */}
+      {wide && (<>
       <ItemContent className="hidden w-36 shrink-0 gap-0.5 md:flex xl:w-44">
         <p className="truncate text-[13px] font-medium">{item.vendor || '—'}</p>
         <p className="truncate text-xs text-muted-foreground">{item.brand || '—'}</p>
@@ -119,9 +132,11 @@ function ItemCard({ item, groupBy, onOpen }: ItemCardProps) {
           </span>
         )}
       </div>
+      </>)}
 
       <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground/60 transition-transform duration-200 group-hover/item:translate-x-0.5" />
 
+      {!wide && (
       <ItemFooter className="gap-3 md:hidden">
         <StatusBadge status={item.status} />
         <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -134,6 +149,7 @@ function ItemCard({ item, groupBy, onOpen }: ItemCardProps) {
           <span className="shrink-0 text-xs font-medium tabular">{item.progress}%</span>
         </div>
       </ItemFooter>
+      )}
     </Item>
   );
 
