@@ -1,6 +1,7 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import type { Anomaly, ItemStatus, MilestoneEntry, ProcurementItem, Project } from '@/types';
 import { downloadWorkbook } from './download';
+import { loadExcelJS, newWorkbook } from './exceljs';
 import {
   STATUS_LABELS, computeDeviation, computeOverallProgress, detectAnomalies,
   disciplineBreakdown, milestoneStats, today, vendorStats,
@@ -711,7 +712,7 @@ export function buildWorkbook(
 ): ExcelJS.Workbook {
   const anomalies = detectAnomalies(items);
 
-  const wb = new ExcelJS.Workbook();
+  const wb = newWorkbook();
   wb.creator = project?.pic || 'Procurement';
   wb.company = project?.client || '';
   wb.lastModifiedBy = project?.pic || 'Procurement';
@@ -743,6 +744,8 @@ export async function exportWorkbook(
   project: Project | null,
   items: ProcurementItem[],
 ): Promise<ExportResult> {
+  await loadExcelJS();
+
   const revision = (project?.revision ?? 0) + 1;
   const wb = buildWorkbook(project, items, revision);
   const fileName = exportFileName(project, revision);

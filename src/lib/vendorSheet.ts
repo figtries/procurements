@@ -1,10 +1,11 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import type { ProcurementItem, Project } from '@/types';
 import {
   BLACK, CREAM, DATE_FMT, FONT, GREY, INPUT, LEFT, LOCKED, PCT_FMT,
   body, fill, rule, sheetOptions, shortDate,
 } from './excelTheme';
 import { downloadWorkbook } from './download';
+import { loadExcelJS, newWorkbook } from './exceljs';
 import { FIELD_BY_KEY, type FieldDef, type ItemFieldKey, readField } from './fields';
 import { today } from './procurement';
 
@@ -355,7 +356,7 @@ function buildForm(
   // One column per item, and at least one so an empty vendor still reads.
   const span = COLON_COL + Math.max(1, rows.length);
 
-  const wb = new ExcelJS.Workbook();
+  const wb = newWorkbook();
   wb.creator = project?.pic || 'Procurement';
   wb.company = project?.client || '';
   wb.created = new Date();
@@ -454,6 +455,8 @@ export async function exportVendorWorkbook(
   vendor: string,
   items: ProcurementItem[],
 ): Promise<string> {
+  await loadExcelJS();
+
   const revision = project?.revision ?? 1;
   return downloadWorkbook(
     buildVendorWorkbook(project, vendor, items, revision),
@@ -466,6 +469,8 @@ export async function exportItemForm(
   project: Project | null,
   item: ProcurementItem,
 ): Promise<string> {
+  await loadExcelJS();
+
   const revision = project?.revision ?? 1;
   return downloadWorkbook(
     buildItemWorkbook(project, item, revision),

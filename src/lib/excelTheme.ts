@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import type { ItemStatus } from '@/types';
 import { today } from './procurement';
 

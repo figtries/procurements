@@ -1,20 +1,18 @@
 'use client';
 
 import { ViewTransition, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { DUMMY_PROJECT, DUMMY_ITEMS } from '@/lib/dummyData';
 
 import AppSidebar from '@/components/AppSidebar';
 import DeleteModal from '@/components/DeleteModal';
-import ImportModal from '@/components/ImportModal';
-import ItemFormModal from '@/components/ItemFormModal';
 import type { ItemFormState } from '@/components/ItemFormModal';
 import DashboardPage from '@/components/dashboard/DashboardPage';
 import OverviewPage from '@/components/dashboard/OverviewPage';
 import ItemDetail from '@/components/dashboard/ItemDetail';
 import ProjectsPage from '@/components/projects/ProjectsPage';
-import ProjectForm, { type ProjectFormValues } from '@/components/projects/ProjectForm';
-import ProjectCommand from '@/components/ProjectCommand';
+import type { ProjectFormValues } from '@/components/projects/ProjectForm';
 import {
   SidebarInset, SidebarProvider, SidebarTrigger,
 } from '@/components/ui/sidebar';
@@ -29,18 +27,62 @@ import {
   saveItems,
   saveProjects,
 } from '@/lib/store';
-import { exportWorkbook } from '@/lib/excelExport';
-import { exportItemForm, exportVendorWorkbook } from '@/lib/vendorSheet';
-import { applyVendorImport, type VendorColumn, type VendorImportResult } from '@/lib/vendorImport';
+import type { VendorColumn, VendorImportResult } from '@/lib/vendorImport';
 import { deriveStatus, STATUS_LABELS } from '@/lib/procurement';
 import { appendEvents, createdEvent, diffItem } from '@/lib/itemLog';
 import type {
   GroupBy, ImportedRow, ItemStatus, MilestoneEntry, PageName, ProcurementItem, Project,
 } from '@/types';
 
+/* ─────────────── the screens behind a button ───────────────
+   Four dialogs, none of which is on the screen when the app opens, and
+   between them a spreadsheet reader, a spreadsheet writer, a command palette
+   and two long forms. Imported at the top they are simply part of the page:
+   a phone downloads, parses and runs the lot before it may show the first
+   list, to hold four things nobody has asked for yet. Behind `dynamic` each
+   is fetched when it is first opened, which is a network round trip on a
+   connection that has long since finished loading the app. */
+const ImportModal    = dynamic(() => import('@/components/ImportModal'));
+const ItemFormModal  = dynamic(() => import('@/components/ItemFormModal'));
+const ProjectForm    = dynamic(() => import('@/components/projects/ProjectForm'));
+const ProjectCommand = dynamic(() => import('@/components/ProjectCommand'));
+
+/**
+ * Holds a dialog back until it is first asked for, then leaves it mounted.
+ *
+ * Nothing above is fetched while this returns nothing, which is the point.
+ * It stays after the first open rather than unmounting on close so the
+ * closing animation still has something to play, and so opening it again is
+ * immediate.
+ */
+function Deferred({ open, children }: { open: boolean; children: React.ReactNode }) {
+  const [summoned, setSummoned] = useState(open);
+  // Set during the render that opened it — an effect would mount the dialog a
+  // frame late, and the frame it costs is the one the tap is waiting on.
+  if (open && !summoned) setSummoned(true);
+  return summoned ? children : null;
+}
+
 /* ─────────────── helpers ─────────────── */
 function buildMilestone(plan: string, fc: string, act: string, note: string): MilestoneEntry {
   return { plan, forecast: fc, actual: act, note };
+}
+
+/** Cut a list into the headed groups the overview renders. */
+function groupItems(list: ProcurementItem[], groupBy: GroupBy) {
+  const map = new Map<string, ProcurementItem[]>();
+  for (const item of list) {
+    const key = groupBy === 'discipline' ? item.discipline
+      : groupBy === 'status'             ? item.status
+      : item.vendor;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(item);
+  }
+  return Array.from(map.entries()).map(([key, items]) => ({
+    key,
+    label: groupBy === 'status' ? STATUS_LABELS[key as ItemStatus] : key,
+    items,
+  }));
 }
 
 /* ─────────────── MAIN PAGE ─────────────── */
@@ -124,6 +166,39 @@ export default function ProcurementApp() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsMounted(true);
+  }, []);
+
+  /* The dialogs, fetched once the app is standing.
+     Off the first load is where they belong, but "off the first load" and
+     "fetched at the moment of the tap" are not the same thing: the second
+     spends a round trip with the screen doing nothing, and on a phone that
+     is the tap looking ignored. So they are asked for a beat after the app
+     is usable, on a connection that is by then idle, and every tap after
+     that opens on cached code.
+
+     Not the workbook library. That one is a megabyte, it is wanted by two
+     buttons out of the whole app, and most days by neither — it stays on
+     demand, where the export and import paths ask for it themselves. */
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      void import('@/components/ItemFormModal');
+      void import('@/components/ImportModal');
+      void import('@/components/projects/ProjectForm');
+    }, 1200);
+    return () => window.clearTimeout(id);
+  }, []);
+
+  /* The palette's shortcut, listened for here rather than inside the palette:
+     the palette itself is not on the page until it is first opened, and a
+     shortcut that needs the thing it opens to already be there is no use. */
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey)) return;
+      e.preventDefault();
+      setPaletteOpen(open => !open);
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
   /* ── Derived ──
@@ -396,6 +471,7 @@ export default function ProcurementApp() {
     if (!projectItems.length) { toast.error('No items to export yet.'); return; }
     setExporting(true);
     try {
+      const { exportWorkbook } = await import('@/lib/excelExport');
       const { revision, fileName } = await exportWorkbook(activeProject, projectItems);
       if (activeProject) {
         const nextProjects = projects.map(p =>
@@ -416,6 +492,7 @@ export default function ProcurementApp() {
   async function handleExportVendor(vendor: string) {
     setExporting(true);
     try {
+      const { exportVendorWorkbook } = await import('@/lib/vendorSheet');
       const fileName = await exportVendorWorkbook(activeProject, vendor, projectItems);
       toast.success(`Form for ${vendor} downloaded`, { description: fileName });
     } catch (err) {
@@ -434,6 +511,7 @@ export default function ProcurementApp() {
   async function handleExportItemForm(item: ProcurementItem) {
     setExporting(true);
     try {
+      const { exportItemForm } = await import('@/lib/vendorSheet');
       const fileName = await exportItemForm(activeProject, item);
       toast.success('Progress form downloaded', { description: fileName });
     } catch (err) {
@@ -455,7 +533,10 @@ export default function ProcurementApp() {
   }
 
   /** Apply a returned vendor form: reviewed changes only, each one logged. */
-  function handleVendorImport(result: VendorImportResult, columns: VendorColumn[]) {
+  async function handleVendorImport(result: VendorImportResult, columns: VendorColumn[]) {
+    // Already in cache: the dialog that produced this result read the form
+    // with the very same module.
+    const { applyVendorImport } = await import('@/lib/vendorImport');
     const applied = applyVendorImport(items, result, columns);
     startNav(() => {
       setItems(applied.items);
@@ -506,8 +587,14 @@ export default function ProcurementApp() {
     }
   }
 
-  /* ─── Computed overview data ─── */
-  const filteredItems = projectItems.filter(item => {
+  /* ─── Computed overview data ───
+     Memoised for identity above all. Every one of these is a fresh array on
+     each render, and each is a prop on a memoised child — the group cards
+     down the overview take these objects and nothing else. Recomputed on
+     every keystroke, every dialog opening, every export finishing, they hand
+     the list eight new groups that hold the same items as before, and eighty
+     rows render again to draw exactly what is already on the screen. */
+  const filteredItems = useMemo(() => projectItems.filter(item => {
     const q = search.toLowerCase();
     const matchSearch = !q ||
       [item.desc, item.vendor, item.brand, item.poNo, item.discipline]
@@ -516,29 +603,23 @@ export default function ProcurementApp() {
     const matchDisc   = !filterDisc   || item.discipline === filterDisc;
     const matchVendor = !filterVendor || item.vendor === filterVendor;
     return matchSearch && matchStatus && matchDisc && matchVendor;
-  });
+  }), [projectItems, search, filterStatus, filterDisc, filterVendor]);
 
   const hasFilters = !!(search || filterStatus || filterDisc || filterVendor);
 
-  function groupItems(list: ProcurementItem[]) {
-    const map = new Map<string, ProcurementItem[]>();
-    for (const item of list) {
-      const key = groupBy === 'discipline' ? item.discipline
-        : groupBy === 'status'             ? item.status
-        : item.vendor;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
-    }
-    return Array.from(map.entries()).map(([key, items]) => ({
-      key,
-      label: groupBy === 'status' ? STATUS_LABELS[key as ItemStatus] : key,
-      items,
-    }));
-  }
+  const grouped = useMemo(
+    () => groupItems(filteredItems, groupBy),
+    [filteredItems, groupBy],
+  );
 
-  const grouped       = groupItems(filteredItems);
-  const uniqueVendors = Array.from(new Set(projectItems.map(i => i.vendor).filter(Boolean)));
-  const uniqueDiscs   = Array.from(new Set(projectItems.map(i => i.discipline).filter(Boolean)));
+  const uniqueVendors = useMemo(
+    () => Array.from(new Set(projectItems.map(i => i.vendor).filter(Boolean))),
+    [projectItems],
+  );
+  const uniqueDiscs = useMemo(
+    () => Array.from(new Set(projectItems.map(i => i.discipline).filter(Boolean))),
+    [projectItems],
+  );
 
   /* ─────── RENDER ─────── */
   if (!isMounted) return null;
@@ -648,40 +729,48 @@ export default function ProcurementApp() {
 
       {/* Up here with the other dialogs rather than inside the projects page,
           so opening it is a change the page can sit out. */}
-      <ProjectForm
-        open={pfOpen}
-        onOpenChange={setPfOpen}
-        onSubmit={handleCreateProject}
-      />
+      <Deferred open={pfOpen}>
+        <ProjectForm
+          open={pfOpen}
+          onOpenChange={setPfOpen}
+          onSubmit={handleCreateProject}
+        />
+      </Deferred>
 
       {/* Lives outside the page switch: the shortcut works from any screen. */}
-      <ProjectCommand
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        projects={projects}
-        items={items}
-        activeProjectId={activeProjectId}
-        onSelectProject={handleSelectProject}
-        onNavigate={nav}
-        onCreateProject={() => { nav('projects'); setPfOpen(true); }}
-      />
+      <Deferred open={paletteOpen}>
+        <ProjectCommand
+          open={paletteOpen}
+          onOpenChange={setPaletteOpen}
+          projects={projects}
+          items={items}
+          activeProjectId={activeProjectId}
+          onSelectProject={handleSelectProject}
+          onNavigate={nav}
+          onCreateProject={() => { nav('projects'); setPfOpen(true); }}
+        />
+      </Deferred>
 
-      <ImportModal
-        open={importOpen}
-        existingItems={projectItems}
-        projectId={activeProject?.id ?? ''}
-        scopeItem={importScope}
-        onClose={closeImport}
-        onConfirm={handleImportConfirm}
-        onConfirmVendor={handleVendorImport}
-      />
+      <Deferred open={importOpen}>
+        <ImportModal
+          open={importOpen}
+          existingItems={projectItems}
+          projectId={activeProject?.id ?? ''}
+          scopeItem={importScope}
+          onClose={closeImport}
+          onConfirm={handleImportConfirm}
+          onConfirmVendor={handleVendorImport}
+        />
+      </Deferred>
 
-      <ItemFormModal
-        open={formOpen}
-        editingItem={editingItem}
-        onClose={closeItemForm}
-        onSave={handleSaveItem}
-      />
+      <Deferred open={formOpen}>
+        <ItemFormModal
+          open={formOpen}
+          editingItem={editingItem}
+          onClose={closeItemForm}
+          onSave={handleSaveItem}
+        />
+      </Deferred>
 
       <DeleteModal
         open={deleteOpen}

@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { memo, startTransition, useEffect, useMemo, useState } from 'react';
 import type { GroupBy, ProcurementItem } from '@/types';
 import { getDisciplineStyle } from '@/lib/procurement';
 import ItemCard from './ItemCard';
@@ -63,7 +63,17 @@ function Heading({ group, groupBy, children }: {
   );
 }
 
-function Rows({ items, groupBy, onOpenDetail }: {
+/**
+ * One page of rows.
+ *
+ * Memoised together with the rows inside it, because the state that turns a
+ * page lives just above: without this, asking for page two renders page one,
+ * two and three all over again — the whole group — in the frames embla wants
+ * for the slide. The pages are cut once by `paginate`, so the array handed
+ * down here is the same array until the group itself changes, and every page
+ * but the heading bails out.
+ */
+const Rows = memo(function Rows({ items, groupBy, onOpenDetail }: {
   items: ProcurementItem[];
   groupBy: GroupBy;
   onOpenDetail: (item: ProcurementItem) => void;
@@ -75,14 +85,14 @@ function Rows({ items, groupBy, onOpenDetail }: {
           key={item.id}
           item={item}
           groupBy={groupBy}
-          onClick={() => onOpenDetail(item)}
+          onOpen={onOpenDetail}
         />
       ))}
     </ItemGroup>
   );
-}
+});
 
-export default function GroupCard({ group, groupBy, lastOpenedId, onOpenDetail }: GroupCardProps) {
+function GroupCard({ group, groupBy, lastOpenedId, onOpenDetail }: GroupCardProps) {
   const pages = useMemo(() => paginate(group.items), [group.items]);
 
   // Short groups stay a plain list: a pager that can never move would only add
@@ -115,6 +125,12 @@ export default function GroupCard({ group, groupBy, lastOpenedId, onOpenDetail }
     </Card>
   );
 }
+
+/** Eight of these sit on the overview at once, each holding its own carousel
+ *  and up to five rows a page. Whatever one of them is doing — a page turn, a
+ *  warm-up timer — is its own business, and the other seven should not have to
+ *  render again for it. */
+export default memo(GroupCard);
 
 /**
  * The pages of a long group, on the same carousel the discipline breakdown
@@ -160,6 +176,10 @@ function Pager({ pages, group, groupBy, lastOpenedId, onOpenDetail }: {
   const startIndex = Math.max(0, pages.findIndex(p => p.some(i => i.id === lastOpenedId)));
   const [page, setPage] = useState(startIndex);
 
+  /** Held steady so the carousel's context is not rebuilt — and every slide
+   *  in it re-rendered — on each pass through here. */
+  const opts = useMemo(() => ({ align: 'start' as const, startIndex }), [startIndex]);
+
   useEffect(() => {
     // A timer rather than `requestIdleCallback`: idle callbacks are scheduled
     // against frames, so a tab that is not drawing never gets one and the
@@ -197,7 +217,7 @@ function Pager({ pages, group, groupBy, lastOpenedId, onOpenDetail }: {
     // keeps embla's non-passive listener off the vertical scroll.
     <Carousel
       className="contents"
-      opts={{ align: 'start', startIndex }}
+      opts={opts}
       setApi={setApi}
     >
       <Heading group={group} groupBy={groupBy}>

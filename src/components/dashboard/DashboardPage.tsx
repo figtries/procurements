@@ -529,6 +529,10 @@ export default function DashboardPage({
  *  a project with more disciplines than that pages through them. */
 const DISC_PAGE_SIZE = 4;
 
+/** One object for the module: a literal written inline would be a new one on
+ *  every render, and the carousel's context is built from it. */
+const CAROUSEL_OPTS = { align: 'start' } as const;
+
 function DisciplineCard({ disciplines }: { disciplines: DisciplineBreakdown[] }) {
   const [api, setApi] = useState<CarouselApi>();
   const [page, setPage] = useState(0);
@@ -616,7 +620,7 @@ function DisciplineCard({ disciplines }: { disciplines: DisciplineBreakdown[] })
       {/* The carousel takes no box of its own — `contents` keeps the heading and
           the pages as direct children of the card, so the arrows can sit in the
           heading and still reach the carousel's context. */}
-      <Carousel className="contents" opts={{ align: 'start' }} setApi={setApi}>
+      <Carousel className="contents" opts={CAROUSEL_OPTS} setApi={setApi}>
         <CardHeader>
           <CardTitle>Breakdown by discipline</CardTitle>
           <CardAction className="flex items-center gap-1">

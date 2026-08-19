@@ -109,20 +109,30 @@ function Carousel({
     }
   }, [api, onSelect])
 
+  // Memoised: a fresh object here is a changed context, and a changed context
+  // re-renders every part below — the track and each slide in it — whenever
+  // anything at all re-renders the carousel. On a page carrying one of these
+  // per group, that is a lot of work to spend on an unchanged value.
+  const context = React.useMemo(
+    () => ({
+      carouselRef,
+      api,
+      opts,
+      orientation:
+        orientation || (opts?.axis === "y" ? "vertical" : "horizontal"),
+      scrollPrev,
+      scrollNext,
+      canScrollPrev,
+      canScrollNext,
+    }),
+    [
+      carouselRef, api, opts, orientation, scrollPrev, scrollNext,
+      canScrollPrev, canScrollNext,
+    ]
+  )
+
   return (
-    <CarouselContext.Provider
-      value={{
-        carouselRef,
-        api: api,
-        opts,
-        orientation:
-          orientation || (opts?.axis === "y" ? "vertical" : "horizontal"),
-        scrollPrev,
-        scrollNext,
-        canScrollPrev,
-        canScrollNext,
-      }}
-    >
+    <CarouselContext.Provider value={context}>
       <div
         onKeyDownCapture={handleKeyDown}
         className={cn("relative", className)}
@@ -157,12 +167,39 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
       el.style.willChange = ""
     }
 
-    // `select` covers the arrows, which move the carousel without a pointer
-    // ever going down on it.
+    // A finger going down anywhere on the carousel — on the track or on an
+    // arrow — is the earliest warning that it is about to move, and the layer
+    // wants making before the movement starts rather than in the same frame
+    // as its first step. Asked for as the slide begins, the browser rasters a
+    // track three pages wide while it is already animating, and that is the
+    // hitch a tap on the arrow had on a phone. A pointer going down is a beat
+    // ahead of the click it becomes, which is all the notice this needs.
+    //
+    // Arrows only. A layer is given up again on "settle", which is an event
+    // about movement — so promoting on a touch that never moves anything, a
+    // tap on a row of the list inside, would leave that carousel holding a
+    // layer for good. An arrow is the one place a pointer going down always
+    // means a slide: at either end of the track the button is disabled, and a
+    // disabled button is not pressed.
+    //
+    // The listener sits on the carousel's own element rather than on the
+    // arrows, because the arrows are outside the track — here they sit up in
+    // the card's heading — and the element that holds both is given no box of
+    // its own, but is still in the tree for events to pass through.
+    const root = el.closest<HTMLElement>('[data-slot="carousel"]')
+    const liftForArrow = (e: Event) => {
+      const target = e.target as Element | null
+      if (target?.closest('[data-slot="carousel-previous"],[data-slot="carousel-next"]')) lift()
+    }
+    root?.addEventListener("pointerdown", liftForArrow, { passive: true })
+
+    // `select` is the fallback for every way it moves without a pointer: the
+    // arrow keys, or a page asked for in code.
     api.on("pointerDown", lift)
     api.on("select", lift)
     api.on("settle", drop)
     return () => {
+      root?.removeEventListener("pointerdown", liftForArrow)
       api.off("pointerDown", lift)
       api.off("select", lift)
       api.off("settle", drop)

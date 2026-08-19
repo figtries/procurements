@@ -1,6 +1,7 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import type { ImportResult, MilestoneEntry, ProcurementItem } from '@/types';
 import { EXPORT_MARKER, PRIMARY_SHEET } from './excelExport';
+import { loadExcelJS, newWorkbook } from './exceljs';
 import { DISCIPLINES } from './procurement';
 
 /* ═══════════════════════════════════════════════════════════
@@ -400,7 +401,8 @@ export async function importWorkbook(
 ): Promise<ImportResult> {
   const result: ImportResult = { rows: [], sheetsRead: [], errors: [] };
 
-  const workbook = new ExcelJS.Workbook();
+  await loadExcelJS();
+  const workbook = newWorkbook();
   try {
     await workbook.xlsx.load(await file.arrayBuffer());
   } catch {

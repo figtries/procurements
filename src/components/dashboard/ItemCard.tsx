@@ -1,3 +1,4 @@
+import { memo, useCallback } from 'react';
 import {
   ChevronRight, CircleDashed, Clock, PackageCheck, TrendingUp, TriangleAlert,
   type LucideIcon,
@@ -17,7 +18,10 @@ interface ItemCardProps {
   /** The heading already names whatever the list is grouped on, so the row
    *  does not repeat it. */
   groupBy?: GroupBy;
-  onClick: () => void;
+  /** Takes the item rather than a closure over it: a fresh arrow written at
+   *  the call site would be a new prop on every render of the list, and the
+   *  memo below would never once hold. */
+  onOpen: (item: ProcurementItem) => void;
 }
 
 /** One glyph per schedule state — the row reads before any of its text does. */
@@ -29,29 +33,50 @@ const STATUS_ICON: Record<ItemStatus, LucideIcon> = {
   onsite:   PackageCheck,
 };
 
-export default function ItemCard({ item, groupBy, onClick }: ItemCardProps) {
+/**
+ * Class merges that never vary, done once for the module instead of once per
+ * row per render.
+ *
+ * `cn` reads every class it is handed to decide which of them win, which is
+ * cheap on its own and adds up over a list — the overview mounts near ninety
+ * of these rows, and each one used to run four of these merges every time it
+ * rendered, always to the same answer. The row's own classes are literals,
+ * and there are five statuses, so both sets can be settled up front.
+ */
+const ROW = cn(
+  'relative gap-x-3 rounded-none px-4 py-3 transition-colors hover:bg-muted/50',
+  // Item ships with a transparent 1px border on all four sides; colouring
+  // just the bottom edge turns it into the rule between rows for free.
+  'border-b-border last:border-b-transparent',
+  'has-[button:focus-visible]:bg-muted/50 has-[button:focus-visible]:ring-3',
+  'has-[button:focus-visible]:ring-ring/50 has-[button:focus-visible]:ring-inset',
+);
+
+const STATUS_STYLE = Object.fromEntries(
+  Object.entries(STATUS_CLASSES).map(([status, s]) => [status, {
+    chip: cn('size-8 rounded-lg', s.chip),
+    rail: cn('transition-[width] duration-500', s.rail),
+  }]),
+) as Record<ItemStatus, { chip: string; rail: string }>;
+
+function ItemCard({ item, groupBy, onOpen }: ItemCardProps) {
   const nextMile  = getNextMilestone(item);
-  const status    = STATUS_CLASSES[item.status];
+  const status    = STATUS_STYLE[item.status];
   const Icon      = STATUS_ICON[item.status];
 
+  /** Stable for as long as the row is showing the same item, so the memo
+   *  below has something to hold on to. */
+  const open = useCallback(() => onOpen(item), [onOpen, item]);
+
   const row = (
-    <Item
-      className={cn(
-        'relative gap-x-3 rounded-none px-4 py-3 transition-colors hover:bg-muted/50',
-        // Item ships with a transparent 1px border on all four sides; colouring
-        // just the bottom edge turns it into the rule between rows for free.
-        'border-b-border last:border-b-transparent',
-        'has-[button:focus-visible]:bg-muted/50 has-[button:focus-visible]:ring-3',
-        'has-[button:focus-visible]:ring-ring/50 has-[button:focus-visible]:ring-inset',
-      )}
-    >
+    <Item className={ROW}>
       {/* Stretched hit area — the whole row is the target, without nesting the
           row's own layout inside a button element. */}
-      <button type="button" onClick={onClick} className="absolute inset-0 z-10 outline-none">
+      <button type="button" onClick={open} className="absolute inset-0 z-10 outline-none">
         <span className="sr-only">Open {item.desc}</span>
       </button>
 
-      <ItemMedia variant="icon" className={cn('size-8 rounded-lg', status.chip)}>
+      <ItemMedia variant="icon" className={status.chip}>
         <Icon className="size-4" />
       </ItemMedia>
 
@@ -82,7 +107,7 @@ export default function ItemCard({ item, groupBy, onClick }: ItemCardProps) {
         <Progress
           value={item.progress}
           trackClassName="h-1.5"
-          indicatorClassName={cn('transition-[width] duration-500', status.rail)}
+          indicatorClassName={status.rail}
         />
       </div>
 
@@ -104,7 +129,7 @@ export default function ItemCard({ item, groupBy, onClick }: ItemCardProps) {
             value={item.progress}
             className="min-w-0 flex-1"
             trackClassName="h-1.5"
-            indicatorClassName={cn('transition-[width] duration-500', status.rail)}
+            indicatorClassName={status.rail}
           />
           <span className="shrink-0 text-xs font-medium tabular">{item.progress}%</span>
         </div>
@@ -114,3 +139,15 @@ export default function ItemCard({ item, groupBy, onClick }: ItemCardProps) {
 
   return row;
 }
+
+/**
+ * Memoised, and the pager is the reason.
+ *
+ * Turning a group to its next page is one piece of state changing in the card
+ * above — and without this, every row of every page of that group renders
+ * again to produce exactly what is already on screen, on the same thread
+ * embla is using to animate the slide. Eleven rows for Mechanical alone, each
+ * a fistful of class merges and date formatting, all landing in the frames
+ * where the movement starts. That was the weight on the arrow.
+ */
+export default memo(ItemCard);

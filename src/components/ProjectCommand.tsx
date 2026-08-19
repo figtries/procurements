@@ -1,6 +1,5 @@
 'use client';
 
-import { useEffect } from 'react';
 import { Folder, FolderOpen, LayoutDashboard, ListChecks, Plus } from 'lucide-react';
 import type { PageName, ProcurementItem, Project } from '@/types';
 import {
@@ -27,16 +26,6 @@ export default function ProjectCommand({
   open, onOpenChange, projects, items, activeProjectId,
   onSelectProject, onNavigate, onCreateProject,
 }: ProjectCommandProps) {
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey)) return;
-      e.preventDefault();
-      onOpenChange(!open);
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [open, onOpenChange]);
-
   /** Every command closes the palette, so the closing lives in one place. */
   function run(action: () => void) {
     onOpenChange(false);

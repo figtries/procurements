@@ -1,8 +1,9 @@
-import ExcelJS from 'exceljs';
+import type ExcelJS from 'exceljs';
 import type { ItemEvent, ProcurementItem } from '@/types';
 import { FIELD_BY_KEY, type ItemFieldKey, VENDOR_FIELDS, readField, writeField } from './fields';
 import { type FormScope, VENDOR_SHEET, VENDOR_TEMPLATE_MARKER } from './vendorSheet';
 import { deriveStatus } from './procurement';
+import { loadExcelJS, newWorkbook } from './exceljs';
 import { blockers, validateItem } from './rules';
 import { appendEvents, diffItem } from './itemLog';
 
@@ -167,7 +168,8 @@ export async function readVendorWorkbook(
     vendor: '', projectId: '', projectName: '', generatedAt: '', columns: [], errors: [],
   };
 
-  const wb = new ExcelJS.Workbook();
+  await loadExcelJS();
+  const wb = newWorkbook();
   try {
     await wb.xlsx.load(await file.arrayBuffer());
   } catch {
