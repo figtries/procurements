@@ -21,6 +21,29 @@ type CarouselProps = {
   setApi?: (api: CarouselApi) => void
 }
 
+/**
+ * How long a slide takes to arrive.
+ *
+ * Embla's `duration` is not milliseconds; it is a factor in a friction
+ * integrator that runs once a frame — velocity gains `displacement/duration`
+ * and is then multiplied by 0.68, so the track approaches its target and
+ * never overshoots. Running that loop out at the stock 25, over one page of a
+ * phone: 383ms to cover nine tenths of the distance, 700ms to cover
+ * ninety-nine hundredths, and a full second before it is actually still.
+ *
+ * Everything else on this screen moves in 90ms out and 150ms in, on the
+ * reasoning that a transition is here to say something changed rather than to
+ * be watched. The slide was four times slower than that, and the long creep
+ * at the end of it — a third of a second spent covering the last tenth of the
+ * way — is what read as weight. Nothing was dropping frames; the movement was
+ * simply still going.
+ *
+ * Ten puts nine tenths of the travel at 150ms and the whole of it at 183ms,
+ * which is the same beat as every other arrival in the app. A caller may
+ * still pass its own `duration` — this only sets the house one.
+ */
+const SLIDE_DURATION = 10
+
 type CarouselContextProps = {
   carouselRef: ReturnType<typeof useEmblaCarousel>[0]
   api: ReturnType<typeof useEmblaCarousel>[1]
@@ -53,6 +76,7 @@ function Carousel({
 }: React.ComponentProps<"div"> & CarouselProps) {
   const [carouselRef, api] = useEmblaCarousel(
     {
+      duration: SLIDE_DURATION,
       ...opts,
       axis: orientation === "horizontal" ? "x" : "y",
     },
