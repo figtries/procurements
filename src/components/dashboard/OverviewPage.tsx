@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  ViewTransition, startTransition, useEffect, useRef, useState, useTransition,
+  ViewTransition, useEffect, useRef, useTransition,
 } from 'react';
 import {
   ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Clock, PackageSearch, Plus, Search,
@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { useMediaQuery } from '@/hooks/use-mobile';
+import { useStaggeredReveal } from '@/hooks/use-staggered-reveal';
 
 interface OverviewPageProps {
   projectItems: ProcurementItem[];
@@ -219,32 +220,10 @@ export default function OverviewPage({
    *  finger in between. Nothing about the total work changes; only whether it
    *  can be interrupted. */
   const wideRows = useMediaQuery(WIDE_ROWS);
-  const [shownGroups, setShownGroups] = useState(
+  const shownGroups = useStaggeredReveal(
+    grouped.length,
     wideRows ? EAGER_GROUPS_WIDE : EAGER_GROUPS_NARROW,
   );
-
-  useEffect(() => {
-    if (shownGroups === grouped.length) return;
-    // A timer, not `requestIdleCallback`: idle callbacks are scheduled against
-    // frames, so a tab that is not drawing would never build the rest of the
-    // list at all. Landing in a later task is the whole point, and any timeout
-    // does that. Non-urgent, so React may slice the work and keep the list it
-    // just handed over responsive while the rest fills in.
-    //
-    // The count comes down as well as up. A filter that narrows the list to
-    // two groups leaves it standing at eight, and clearing that filter would
-    // then build every group again in one commit — the same long task, moved
-    // from the arrival to the X on the search box. Coming down costs nothing
-    // and unmounts nothing, because the groups it is counting past are groups
-    // the filter has already taken off the screen.
-    const id = window.setTimeout(
-      () => startTransition(
-        () => setShownGroups(n => (n > grouped.length ? grouped.length : n + 1)),
-      ),
-      0,
-    );
-    return () => window.clearTimeout(id);
-  }, [shownGroups, grouped.length]);
 
   /** The list itself, and a note that the filter on it came from a banner.
    *

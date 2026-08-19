@@ -1,6 +1,8 @@
 'use client';
 
 import { ViewTransition, useEffect, useMemo, useState, useTransition } from 'react';
+import { useMediaQuery } from '@/hooks/use-mobile';
+import { useStaggeredReveal } from '@/hooks/use-staggered-reveal';
 import {
   ArrowDownToLine, CalendarClock, CheckCircle2, FileWarning,
   PackageSearch, Receipt, Ship, TriangleAlert,
@@ -68,9 +70,52 @@ function readinessTone(pct: number) {
   return pct < 50 ? 'bg-late' : pct < 90 ? 'bg-atrisk' : 'bg-ok';
 }
 
+/**
+ * The page below the first screenful, in the order it is read.
+ *
+ * Counted rather than named: the reveal below raises a number, and each of
+ * these waits for its own. The deviation card and the curve beside it are
+ * section nought and never wait — they are what a phone has on screen when
+ * the page arrives.
+ */
+const DASH_SECTIONS = 5;
+
+/**
+ * How much of the dashboard is built before the screen is handed over.
+ *
+ * One section on a phone: the deviation card and the S-curve fill 375x812 on
+ * their own, and everything under them — tiles, milestones, the lookahead
+ * grid, anomalies, the vendor table — was being built into the same commit
+ * the tap was waiting on. Built with the milestones and everything after them
+ * cut out, purely to find out, the arrival cost no long task at all where it
+ * had cost 61ms; the seven derivations behind the whole page come to 14ms of
+ * that, so what was being paid for was the rendering, not the arithmetic.
+ *
+ * Two on a wide screen, where the deviation and the curve sit side by side
+ * in one short row and the tiles come up beside the fold rather than below
+ * it.
+ */
+const EAGER_SECTIONS_WIDE = 2;
+const EAGER_SECTIONS_NARROW = 1;
+
+/** One section of the page, held back until the reveal has reached it. */
+function Reveal({ at, shown, children }: {
+  at: number;
+  shown: number;
+  children: React.ReactNode;
+}) {
+  return at < shown ? <>{children}</> : null;
+}
+
 export default function DashboardPage({
   project, items, onOpenItem, onImport,
 }: DashboardPageProps) {
+  const wide  = useMediaQuery('(min-width: 48rem)');
+  const shown = useStaggeredReveal(
+    DASH_SECTIONS + 1,
+    wide ? EAGER_SECTIONS_WIDE : EAGER_SECTIONS_NARROW,
+  );
+
   const [weeks, setWeeks] = useState('4');
   /** Switching the horizon runs in a transition so the grid crossfades. */
   const [, startLookahead] = useTransition();
@@ -212,313 +257,323 @@ export default function DashboardPage({
         </Card>
       </div>
 
-      {/* ── Tiles ──
-          Five tiles never divide evenly into two columns, so on a phone the
-          total takes the full width and the four statuses pair off below it. */}
-      <div className="mt-3 grid grid-cols-2 gap-2.5 sm:mt-4 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <StatTile
-          className="col-span-2 md:col-span-1"
-          label="Total items" value={items.length}
-          sub={`${disciplines.length} disciplines · ${uniqueVendors} vendors`}
-        />
-        <StatTile
-          label="On Site" value={counts.onsite}
-          sub={`${Math.round((counts.onsite / items.length) * 100)}% delivered`}
-          tone="onsite"
-        />
-        <StatTile
-          label="On Track" value={counts.ontrack} sub="On schedule"
-          tone="ontrack"
-        />
-        <StatTile
-          label="At Risk" value={counts.atrisk} sub="FAT within 14 days"
-          tone="atrisk"
-        />
-        <StatTile
-          label="Late" value={counts.late} sub="Overdue"
-          tone="late"
-        />
-      </div>
-
-      {/* ── Milestone + disiplin ── */}
-      <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[1.25fr_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Milestone position</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {milestones.map(ms => {
-              const pct = (n: number) => (ms.total ? (n / ms.total) * 100 : 0);
-              return (
-                <div key={ms.key} className="space-y-2">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
-                      <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide', MS_ACCENT[ms.key])}>
-                        {ms.label}
+      <Reveal at={1} shown={shown}>
+        {/* ── Tiles ──
+            Five tiles never divide evenly into two columns, so on a phone the
+            total takes the full width and the four statuses pair off below it. */}
+        <div className="mt-3 grid grid-cols-2 gap-2.5 sm:mt-4 sm:gap-3 md:grid-cols-3 xl:grid-cols-5">
+          <StatTile
+            className="col-span-2 md:col-span-1"
+            label="Total items" value={items.length}
+            sub={`${disciplines.length} disciplines · ${uniqueVendors} vendors`}
+          />
+          <StatTile
+            label="On Site" value={counts.onsite}
+            sub={`${Math.round((counts.onsite / items.length) * 100)}% delivered`}
+            tone="onsite"
+          />
+          <StatTile
+            label="On Track" value={counts.ontrack} sub="On schedule"
+            tone="ontrack"
+          />
+          <StatTile
+            label="At Risk" value={counts.atrisk} sub="FAT within 14 days"
+            tone="atrisk"
+          />
+          <StatTile
+            label="Late" value={counts.late} sub="Overdue"
+            tone="late"
+          />
+        </div>
+  
+      </Reveal>
+      <Reveal at={2} shown={shown}>
+        {/* ── Milestone + disiplin ── */}
+        <div className="mt-3 grid gap-3 sm:mt-4 sm:gap-4 xl:grid-cols-[1.25fr_minmax(0,1fr)]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Milestone position</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {milestones.map(ms => {
+                const pct = (n: number) => (ms.total ? (n / ms.total) * 100 : 0);
+                return (
+                  <div key={ms.key} className="space-y-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="flex min-w-0 items-center gap-2 text-sm font-medium">
+                        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wide', MS_ACCENT[ms.key])}>
+                          {ms.label}
+                        </span>
+                        <span className="truncate text-muted-foreground">{ms.name}</span>
                       </span>
-                      <span className="truncate text-muted-foreground">{ms.name}</span>
+                      <span className="shrink-0 text-sm font-semibold tabular">
+                        {ms.done}<span className="font-normal text-muted-foreground"> / {ms.total}</span>
+                      </span>
+                    </div>
+                    <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
+                      <div className="bg-ok" style={{ width: `${pct(ms.done)}%` }} />
+                      <div className="bg-atrisk"  style={{ width: `${pct(ms.scheduled)}%` }} />
+                      <div className="bg-late"    style={{ width: `${pct(ms.overdue)}%` }} />
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                      <Key swatch="bg-ok" label="Done" n={ms.done} />
+                      <Key swatch="bg-atrisk" label="Scheduled" n={ms.scheduled} />
+                      <Key swatch="bg-late" label="Overdue" n={ms.overdue} />
+                      {ms.unplanned > 0 && (
+                        <Key swatch="bg-muted-foreground/40" label="Not scheduled" n={ms.unplanned} />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
+  
+          <DisciplineCard disciplines={disciplines} />
+        </div>
+  
+      </Reveal>
+      <Reveal at={3} shown={shown}>
+        {/* ── Lookahead ── */}
+        <Card className="mt-3 sm:mt-4">
+          <CardHeader className="max-sm:grid-cols-1!">
+            <CardTitle>Falling due next</CardTitle>
+            {/* Full-width segmented control on a phone: the three horizons
+                would otherwise crowd the title off its own row. */}
+            <CardAction className="max-sm:col-start-1 max-sm:row-start-2 max-sm:mt-3 max-sm:w-full">
+              <Tabs value={weeks} onValueChange={v => startLookahead(() => setWeeks(v))}>
+                <TabsList className="max-sm:w-full">
+                  {LOOKAHEAD_OPTIONS.map(o => (
+                    <TabsTrigger key={o.weeks} value={o.weeks}>{o.label}</TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            <ViewTransition key={weeks} name="lookahead" share="auto" enter="auto" exit="auto" default="none">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              {/* No entry animation of their own: the <ViewTransition> above
+                  already carries this grid on and off, and a stagger underneath
+                  it means every column arrives twice, the second time slower
+                  than the first. */}
+              {lookahead.slice(0, 4).map(week => (
+                <div
+                  key={week.label}
+                  className={cn(
+                    'min-h-36 rounded-xl border p-3',
+                    week.isCurrent ? 'border-info/30 bg-info-bg/60' : 'bg-muted/40',
+                  )}
+                >
+                  <div className="mb-2.5 flex items-baseline justify-between gap-2">
+                    <span className={cn(
+                      'text-[11px] font-bold uppercase tracking-wider',
+                      week.isCurrent ? 'text-info-fg' : 'text-muted-foreground',
+                    )}>
+                      {week.label}
                     </span>
-                    <span className="shrink-0 text-sm font-semibold tabular">
-                      {ms.done}<span className="font-normal text-muted-foreground"> / {ms.total}</span>
+                    <span className="shrink-0 text-[10px] font-semibold text-muted-foreground tabular">
+                      {week.range}
                     </span>
                   </div>
-                  <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
-                    <div className="bg-ok" style={{ width: `${pct(ms.done)}%` }} />
-                    <div className="bg-atrisk"  style={{ width: `${pct(ms.scheduled)}%` }} />
-                    <div className="bg-late"    style={{ width: `${pct(ms.overdue)}%` }} />
-                  </div>
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-                    <Key swatch="bg-ok" label="Done" n={ms.done} />
-                    <Key swatch="bg-atrisk" label="Scheduled" n={ms.scheduled} />
-                    <Key swatch="bg-late" label="Overdue" n={ms.overdue} />
-                    {ms.unplanned > 0 && (
-                      <Key swatch="bg-muted-foreground/40" label="Not scheduled" n={ms.unplanned} />
-                    )}
-                  </div>
+  
+                  {week.events.length === 0 ? (
+                    <p className="px-0.5 py-2 text-[11px] italic text-muted-foreground">Nothing scheduled.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {week.events.slice(0, 6).map(ev => (
+                        <button
+                          key={`${ev.itemId}-${ev.kind}`}
+                          onClick={() => openById(ev.itemId)}
+                          className={cn(
+                            'block w-full rounded-lg border-l-[3px] bg-card px-2.5 py-2 text-left ring-1 ring-foreground/5',
+                            'transition-all duration-200 hover:-translate-y-px hover:shadow-sm hover:ring-foreground/20',
+                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                            ev.overdue ? 'border-l-late bg-late-bg'
+                              : ev.kind === 'fat' ? 'border-l-info'
+                              : ev.kind === 'rts' ? 'border-l-rts'
+                              : 'border-l-ok',
+                          )}
+                        >
+                          <span className="mb-1 flex items-center gap-1.5">
+                            <span className={cn(
+                              'rounded px-1.5 py-px text-[9px] font-bold tracking-wide',
+                              ev.overdue ? 'bg-late/15 text-late-fg' : MS_ACCENT[ev.kind],
+                            )}>
+                              {ev.label}
+                            </span>
+                            <span className={cn(
+                              'ml-auto text-[9px] font-bold tabular',
+                              ev.overdue ? 'text-late-fg' : 'text-muted-foreground',
+                            )}>
+                              {ev.overdue ? 'OVERDUE' : ev.day}
+                            </span>
+                          </span>
+                          <span className="block text-xs font-medium leading-snug">{ev.desc}</span>
+                          <span className="mt-0.5 block text-[10px] text-muted-foreground">{ev.vendor || '—'}</span>
+                        </button>
+                      ))}
+                      {week.events.length > 6 && (
+                        <p className="px-0.5 pt-1 text-[11px] italic text-muted-foreground">
+                          +{week.events.length - 6} more
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
-              );
-            })}
+              ))}
+            </div>
+            </ViewTransition>
+  
+            {weekCount > 4 && (
+              <p className="mt-4 text-xs text-muted-foreground">
+                Showing the first 4 of {weekCount} weeks.{' '}
+                {lookahead.slice(4).reduce((s, w) => s + w.events.length, 0)} further milestones fall due after that.
+              </p>
+            )}
           </CardContent>
         </Card>
-
-        <DisciplineCard disciplines={disciplines} />
-      </div>
-
-      {/* ── Lookahead ── */}
-      <Card className="mt-3 sm:mt-4">
-        <CardHeader className="max-sm:grid-cols-1!">
-          <CardTitle>Falling due next</CardTitle>
-          {/* Full-width segmented control on a phone: the three horizons
-              would otherwise crowd the title off its own row. */}
-          <CardAction className="max-sm:col-start-1 max-sm:row-start-2 max-sm:mt-3 max-sm:w-full">
-            <Tabs value={weeks} onValueChange={v => startLookahead(() => setWeeks(v))}>
-              <TabsList className="max-sm:w-full">
-                {LOOKAHEAD_OPTIONS.map(o => (
-                  <TabsTrigger key={o.weeks} value={o.weeks}>{o.label}</TabsTrigger>
+  
+      </Reveal>
+      <Reveal at={4} shown={shown}>
+        {/* ── Anomali ── */}
+        <Card className="mt-3 sm:mt-4">
+          <CardHeader>
+            <CardTitle>Detected anomalies</CardTitle>
+            <CardAction>
+              <Badge variant="secondary" className="tabular">{anomalies.length} findings</Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {anomalies.length === 0 ? (
+              <Alert className="border-ok/25 bg-ok-bg text-ok-fg">
+                <CheckCircle2 />
+                <AlertTitle>No anomalies</AlertTitle>
+                <AlertDescription className="text-ok-fg/80">
+                  Every item has a sensible schedule and complete documents.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="space-y-2">
+                {topAnomalies.map((a, idx) => (
+                  <AnomalyRow
+                    key={`${a.itemId}-${a.rule}-${idx}`}
+                    anomaly={a}
+                    item={byId.get(a.itemId)}
+                    onOpen={openById}
+                  />
                 ))}
-              </TabsList>
-            </Tabs>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          <ViewTransition key={weeks} name="lookahead" share="auto" enter="auto" exit="auto" default="none">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {/* No entry animation of their own: the <ViewTransition> above
-                already carries this grid on and off, and a stagger underneath
-                it means every column arrives twice, the second time slower
-                than the first. */}
-            {lookahead.slice(0, 4).map(week => (
-              <div
-                key={week.label}
-                className={cn(
-                  'min-h-36 rounded-xl border p-3',
-                  week.isCurrent ? 'border-info/30 bg-info-bg/60' : 'bg-muted/40',
-                )}
-              >
-                <div className="mb-2.5 flex items-baseline justify-between gap-2">
-                  <span className={cn(
-                    'text-[11px] font-bold uppercase tracking-wider',
-                    week.isCurrent ? 'text-info-fg' : 'text-muted-foreground',
-                  )}>
-                    {week.label}
-                  </span>
-                  <span className="shrink-0 text-[10px] font-semibold text-muted-foreground tabular">
-                    {week.range}
-                  </span>
-                </div>
-
-                {week.events.length === 0 ? (
-                  <p className="px-0.5 py-2 text-[11px] italic text-muted-foreground">Nothing scheduled.</p>
-                ) : (
-                  <div className="space-y-1.5">
-                    {week.events.slice(0, 6).map(ev => (
-                      <button
-                        key={`${ev.itemId}-${ev.kind}`}
-                        onClick={() => openById(ev.itemId)}
-                        className={cn(
-                          'block w-full rounded-lg border-l-[3px] bg-card px-2.5 py-2 text-left ring-1 ring-foreground/5',
-                          'transition-all duration-200 hover:-translate-y-px hover:shadow-sm hover:ring-foreground/20',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                          ev.overdue ? 'border-l-late bg-late-bg'
-                            : ev.kind === 'fat' ? 'border-l-info'
-                            : ev.kind === 'rts' ? 'border-l-rts'
-                            : 'border-l-ok',
-                        )}
-                      >
-                        <span className="mb-1 flex items-center gap-1.5">
-                          <span className={cn(
-                            'rounded px-1.5 py-px text-[9px] font-bold tracking-wide',
-                            ev.overdue ? 'bg-late/15 text-late-fg' : MS_ACCENT[ev.kind],
-                          )}>
-                            {ev.label}
-                          </span>
-                          <span className={cn(
-                            'ml-auto text-[9px] font-bold tabular',
-                            ev.overdue ? 'text-late-fg' : 'text-muted-foreground',
-                          )}>
-                            {ev.overdue ? 'OVERDUE' : ev.day}
-                          </span>
-                        </span>
-                        <span className="block text-xs font-medium leading-snug">{ev.desc}</span>
-                        <span className="mt-0.5 block text-[10px] text-muted-foreground">{ev.vendor || '—'}</span>
-                      </button>
-                    ))}
-                    {week.events.length > 6 && (
-                      <p className="px-0.5 pt-1 text-[11px] italic text-muted-foreground">
-                        +{week.events.length - 6} more
-                      </p>
-                    )}
-                  </div>
+                {anomalies.length > topAnomalies.length && (
+                  <p className="pt-1 text-xs text-muted-foreground">
+                    +{anomalies.length - topAnomalies.length} more findings. All of them are written to
+                    the <span className="font-medium text-foreground">ANOMALIES</span> sheet on export.
+                  </p>
                 )}
               </div>
-            ))}
-          </div>
-          </ViewTransition>
-
-          {weekCount > 4 && (
-            <p className="mt-4 text-xs text-muted-foreground">
-              Showing the first 4 of {weekCount} weeks.{' '}
-              {lookahead.slice(4).reduce((s, w) => s + w.events.length, 0)} further milestones fall due after that.
-            </p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Anomali ── */}
-      <Card className="mt-3 sm:mt-4">
-        <CardHeader>
-          <CardTitle>Detected anomalies</CardTitle>
-          <CardAction>
-            <Badge variant="secondary" className="tabular">{anomalies.length} findings</Badge>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {anomalies.length === 0 ? (
-            <Alert className="border-ok/25 bg-ok-bg text-ok-fg">
-              <CheckCircle2 />
-              <AlertTitle>No anomalies</AlertTitle>
-              <AlertDescription className="text-ok-fg/80">
-                Every item has a sensible schedule and complete documents.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="space-y-2">
-              {topAnomalies.map((a, idx) => (
-                <AnomalyRow
-                  key={`${a.itemId}-${a.rule}-${idx}`}
-                  anomaly={a}
-                  item={byId.get(a.itemId)}
-                  onOpen={openById}
-                />
-              ))}
-              {anomalies.length > topAnomalies.length && (
-                <p className="pt-1 text-xs text-muted-foreground">
-                  +{anomalies.length - topAnomalies.length} more findings. All of them are written to
-                  the <span className="font-medium text-foreground">ANOMALIES</span> sheet on export.
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ── Vendor ── */}
-      <Card className="mt-3 sm:mt-4">
-        <CardHeader className="border-b">
-          <CardTitle>Vendor Watchlist</CardTitle>
-          <CardAction>
-            <Badge variant="secondary" className="tabular">{vendors.length} vendors</Badge>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {/* Phone: the same five figures stacked. A five-column table on a
-              360px screen is a sideways scroll and nothing else. */}
-          <div className="divide-y md:hidden">
-            {topVendors.map(v => {
-              const pct = Math.round(v.avgReadiness * 100);
-              return (
-                <div key={v.vendor} className="space-y-2.5 py-3 first:pt-0 last:pb-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{v.vendor}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {v.items} item{v.items === 1 ? '' : 's'} · {v.itemNames.slice(0, 2).join(' · ')}
-                      </p>
-                    </div>
-                    <StatusBadge status={v.worstStatus} className="shrink-0" />
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className={cn('h-full rounded-full transition-[width] duration-500', readinessTone(pct))}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                    <span className="shrink-0 text-xs font-medium tabular">{pct}%</span>
-                    <span className={cn(
-                      'shrink-0 text-xs font-medium tabular',
-                      v.avgSlipDays > 0 && 'text-late-fg',
-                    )}>
-                      {v.avgSlipDays > 0 ? `+${v.avgSlipDays}d` : 'On time'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="hidden overflow-x-auto md:block">
-            <Table className="[&_th]:h-9">
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-44">Vendor</TableHead>
-                  <TableHead className="w-16">Items</TableHead>
-                  <TableHead className="w-32">Readiness</TableHead>
-                  <TableHead className="w-28">Avg. Slip</TableHead>
-                  <TableHead className="w-28 text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {topVendors.map((v, vi) => {
-                  const pct = Math.round(v.avgReadiness * 100);
-                  return (
-                    <TableRow
-                      key={v.vendor}
-                      style={{ animationDelay: `${vi * 40}ms` }}
-                      className="motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-backwards"
-                    >
-                      <TableCell>
-                        <p className="font-medium">{v.vendor}</p>
+            )}
+          </CardContent>
+        </Card>
+  
+      </Reveal>
+      <Reveal at={5} shown={shown}>
+        {/* ── Vendor ── */}
+        <Card className="mt-3 sm:mt-4">
+          <CardHeader className="border-b">
+            <CardTitle>Vendor Watchlist</CardTitle>
+            <CardAction>
+              <Badge variant="secondary" className="tabular">{vendors.length} vendors</Badge>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {/* Phone: the same five figures stacked. A five-column table on a
+                360px screen is a sideways scroll and nothing else. */}
+            <div className="divide-y md:hidden">
+              {topVendors.map(v => {
+                const pct = Math.round(v.avgReadiness * 100);
+                return (
+                  <div key={v.vendor} className="space-y-2.5 py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{v.vendor}</p>
                         <p className="truncate text-xs text-muted-foreground">
-                          {v.itemNames.slice(0, 3).join(' · ')}
+                          {v.items} item{v.items === 1 ? '' : 's'} · {v.itemNames.slice(0, 2).join(' · ')}
                         </p>
-                      </TableCell>
-                      <TableCell className="font-medium tabular">{v.items}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className={cn('h-full rounded-full transition-[width] duration-500', readinessTone(pct))}
-                              style={{ width: `${pct}%` }}
-                            />
+                      </div>
+                      <StatusBadge status={v.worstStatus} className="shrink-0" />
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={cn('h-full rounded-full transition-[width] duration-500', readinessTone(pct))}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="shrink-0 text-xs font-medium tabular">{pct}%</span>
+                      <span className={cn(
+                        'shrink-0 text-xs font-medium tabular',
+                        v.avgSlipDays > 0 && 'text-late-fg',
+                      )}>
+                        {v.avgSlipDays > 0 ? `+${v.avgSlipDays}d` : 'On time'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+  
+            <div className="hidden overflow-x-auto md:block">
+              <Table className="[&_th]:h-9">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-44">Vendor</TableHead>
+                    <TableHead className="w-16">Items</TableHead>
+                    <TableHead className="w-32">Readiness</TableHead>
+                    <TableHead className="w-28">Avg. Slip</TableHead>
+                    <TableHead className="w-28 text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {topVendors.map((v, vi) => {
+                    const pct = Math.round(v.avgReadiness * 100);
+                    return (
+                      <TableRow
+                        key={v.vendor}
+                        style={{ animationDelay: `${vi * 40}ms` }}
+                        className="motion-safe:animate-in motion-safe:fade-in motion-safe:fill-mode-backwards"
+                      >
+                        <TableCell>
+                          <p className="font-medium">{v.vendor}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {v.itemNames.slice(0, 3).join(' · ')}
+                          </p>
+                        </TableCell>
+                        <TableCell className="font-medium tabular">{v.items}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-14 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className={cn('h-full rounded-full transition-[width] duration-500', readinessTone(pct))}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-medium tabular">{pct}%</span>
                           </div>
-                          <span className="text-xs font-medium tabular">{pct}%</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className={cn('text-xs font-medium tabular', v.avgSlipDays > 0 && 'text-late-fg')}>
-                        {v.avgSlipDays > 0 ? `+${v.avgSlipDays} days` : 'On time'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <StatusBadge status={v.worstStatus} />
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+                        </TableCell>
+                        <TableCell className={cn('text-xs font-medium tabular', v.avgSlipDays > 0 && 'text-late-fg')}>
+                          {v.avgSlipDays > 0 ? `+${v.avgSlipDays} days` : 'On time'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <StatusBadge status={v.worstStatus} />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </Reveal>
     </div>
   );
 }
