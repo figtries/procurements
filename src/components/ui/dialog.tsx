@@ -76,40 +76,55 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
-      <DialogPrimitive.Popup
-        data-slot="dialog-content"
-        ref={setPopup}
-        initialFocus={initialFocus ?? popupRef}
-        className={cn(
-          "fixed z-50 grid gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none",
-          // One centred card at every width: a phone gets the same dialog as a
-          // desktop, only narrower. Auto margins do the centring, so no
-          // transform is left for the zoom to fight with.
-          "inset-0 m-auto h-fit w-[calc(100%-2rem)] max-w-sm rounded-xl duration-100",
-          "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
-          "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          className
-        )}
-        {...props}
-      >
-        {children}
-        {showCloseButton && (
-          <DialogPrimitive.Close
-            data-slot="dialog-close"
-            render={
-              <Button
-                variant="ghost"
-                className="absolute top-2 right-2"
-                size="icon-sm"
+      {/* The card is centred by a flex layer rather than by `inset-0 m-auto` on
+          the card itself. Auto margins need the card to be height:fit-content
+          inside a box stretched from the top edge to the bottom one, and WebKit
+          resolves that fit-content late: an iPhone painted the dialog
+          full-height — header against the top, footer down on the home
+          indicator — and only snapped it back to a card a beat later, when
+          something else forced a relayout. As an ordinary in-flow flex item the
+          card's height is its own content from the first frame, so there is
+          nothing left to correct afterwards.
+
+          The layer is click-through so an outside press still reaches the
+          backdrop, and the card takes its own pointer events back. The layer's
+          padding is what keeps the card off the screen edges. */}
+      <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4">
+        <DialogPrimitive.Popup
+          data-slot="dialog-content"
+          ref={setPopup}
+          initialFocus={initialFocus ?? popupRef}
+          className={cn(
+            "pointer-events-auto relative grid gap-4 bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 outline-none",
+            // One centred card at every width: a phone gets the same dialog as
+            // a desktop, only narrower. Nothing is placed with a transform, so
+            // none is left for the zoom to fight with.
+            "max-h-full w-full max-w-sm rounded-xl duration-100",
+            "data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+            "data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+            className
+          )}
+          {...props}
+        >
+          {children}
+          {showCloseButton && (
+            <DialogPrimitive.Close
+              data-slot="dialog-close"
+              render={
+                <Button
+                  variant="ghost"
+                  className="absolute top-2 right-2"
+                  size="icon-sm"
+                />
+              }
+            >
+              <XIcon
               />
-            }
-          >
-            <XIcon
-            />
-            <span className="sr-only">Close</span>
-          </DialogPrimitive.Close>
-        )}
-      </DialogPrimitive.Popup>
+              <span className="sr-only">Close</span>
+            </DialogPrimitive.Close>
+          )}
+        </DialogPrimitive.Popup>
+      </div>
     </DialogPortal>
   )
 }
