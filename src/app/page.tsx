@@ -1,6 +1,8 @@
 'use client';
 
-import { ViewTransition, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import {
+  ViewTransition, useCallback, useEffect, useLayoutEffect, useMemo, useState, useTransition,
+} from 'react';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { DUMMY_PROJECT, DUMMY_ITEMS } from '@/lib/dummyData';
@@ -222,13 +224,6 @@ export default function ProcurementApp() {
 
   /** Every page swap starts at the top of the page it lands on.
    *
-   *  Two reasons to reset here rather than after the fact: landing halfway
-   *  down a screen you have never seen reads as a glitch, and the view
-   *  transition snapshots the old page where it currently sits — so the
-   *  scroll has to settle in the same frame the snapshot is taken, or the
-   *  outgoing image animates from one place while the incoming one starts
-   *  from another.
-   *
    *  Nothing else belongs in here. An earlier pass gave each direction its
    *  own travel distance by writing a custom property to the root element,
    *  which measured at ~12ms of forced style recalc on every navigation —
@@ -237,9 +232,30 @@ export default function ProcurementApp() {
    *  already said by the row that flies between the list and the item it
    *  opens; it was not worth buying twice. */
   const startPageSwap = useCallback((update: () => void) => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     startNav(update);
   }, [startNav]);
+
+  /** The scroll reset, and it has to land in the same frame the new page does.
+   *
+   *  It used to run here on the way in, before `startNav` — which put it in
+   *  the frame of the *click*, not the frame of the swap. A page swap is a
+   *  transition, so React renders it when it can; measured on the way into an
+   *  item from halfway down the overview, the scroll landed 7ms after the tap
+   *  and the item's screen only 53ms after that. In between, for forty-six
+   *  milliseconds — nearer a quarter of a second on a phone — the overview
+   *  was still the page on screen, and it had just been yanked to its top.
+   *  That was the flash of the list people saw before the item opened: not
+   *  the item arriving late, but the list jumping first.
+   *
+   *  A layout effect runs after React has put the new page in the DOM and
+   *  before the browser paints any of it, so the reset cannot be seen on its
+   *  own — there is no frame in which it has happened and the swap has not.
+   *  The outgoing snapshot is then taken where the reader actually left it,
+   *  which is the honest thing for it to be a picture of; the group it is
+   *  drawn in is pinned to its final size, so nothing about it moves. */
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [page]);
 
   const nav = useCallback((p: PageName) => {
     // Leaving the list-and-detail pair behind: there is no list to come
