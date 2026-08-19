@@ -1,6 +1,8 @@
 'use client';
 
-import { ViewTransition, startTransition, useEffect, useState, useTransition } from 'react';
+import {
+  ViewTransition, startTransition, useEffect, useRef, useState, useTransition,
+} from 'react';
 import {
   ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Clock, PackageSearch, Plus, Search,
   TriangleAlert, X,
@@ -62,6 +64,10 @@ interface OverviewPageProps {
  * would be paid for on every arrival and seen on none of them.
  */
 const EAGER_GROUPS = 3;
+
+/** Clearance left above the list when Show scrolls to it: the sticky bar plus
+ *  a little air, so the first group heading is not welded to the rule. */
+const SCROLL_CLEARANCE = 72;
 
 /**
  * Base UI renders a select's raw value unless the root is given an item map,
@@ -198,6 +204,37 @@ export default function OverviewPage({
     return () => window.clearTimeout(id);
   }, []);
 
+  /** The list itself, and a note that the filter on it came from a banner.
+   *
+   *  On a wide screen the banner and the rows it narrows the list to are on
+   *  screen together, so pressing Show visibly does something. On a phone the
+   *  rows are several screens down past the tiles and the toolbar, and the
+   *  press looks like it did nothing at all. So the list is brought to the
+   *  reader rather than left for them to find. */
+  const listRef = useRef<HTMLDivElement>(null);
+  const scrollToList = useRef(false);
+
+  useEffect(() => {
+    if (!scrollToList.current) return;
+    scrollToList.current = false;
+    const el = listRef.current;
+    if (!el) return;
+    // A frame late on purpose: the filter is applied inside a transition, and
+    // the list is only its final height once that has committed. Measured any
+    // earlier, the scroll lands against the list the page used to have.
+    const id = requestAnimationFrame(() => {
+      const top = el.getBoundingClientRect().top + window.scrollY - SCROLL_CLEARANCE;
+      window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [filterStatus]);
+
+  /** Narrow the list to one state, then take the reader down to it. */
+  function showOnly(status: ItemStatus) {
+    scrollToList.current = true;
+    startFilter(() => onFilterStatus(status));
+  }
+
   const total   = projectItems.length;
   const onsite  = projectItems.filter(i => i.status === 'onsite').length;
   const ontrack = projectItems.filter(i => i.status === 'ontrack').length;
@@ -294,8 +331,8 @@ export default function OverviewPage({
         atrisk={atrisk}
         total={total}
         hasProject={hasProject}
-        onFilterLate={() => startFilter(() => onFilterStatus('late'))}
-        onFilterRisk={() => startFilter(() => onFilterStatus('atrisk'))}
+        onFilterLate={() => showOnly('late')}
+        onFilterRisk={() => showOnly('atrisk')}
       />
 
       {/* ── Tiles ──
@@ -379,7 +416,7 @@ export default function OverviewPage({
 
       {/* ── Item groups ── */}
       <ViewTransition key={listKey} name="item-list" share="auto" enter="auto" exit="auto" default="none">
-        <div>
+        <div ref={listRef}>
           {filteredItems.length === 0 ? (
             <Empty className="rounded-xl border border-dashed py-14">
               <EmptyHeader>

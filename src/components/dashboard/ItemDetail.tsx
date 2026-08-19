@@ -116,7 +116,11 @@ export default function ItemDetail({
 
   return (
     <div className="space-y-4">
-      <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 text-muted-foreground">
+      {/* Pulled back into the page's own top padding on both axes. A ghost
+          button draws no box, so its padding reads as more of the gap above
+          it — left as laid out, this one floated in a band of empty roughly
+          twice the size of every gap below it. */}
+      <Button variant="ghost" size="sm" onClick={onBack} className="-mt-2 -ml-2 text-muted-foreground sm:-mt-2.5">
         <ArrowLeft />
         Back to Overview
       </Button>
