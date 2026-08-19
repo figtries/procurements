@@ -27,6 +27,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { useMediaQuery } from '@/hooks/use-mobile';
 
 interface OverviewPageProps {
   projectItems: ProcurementItem[];
@@ -60,10 +61,25 @@ interface OverviewPageProps {
 /**
  * Groups built before the screen is handed over.
  *
- * Three fills the tallest screen this is used on with one to spare; a fourth
- * would be paid for on every arrival and seen on none of them.
+ * Enough to fill the screen and not one more: what sits below the fold is
+ * built a group at a time afterwards, and by the time anyone has scrolled
+ * that far it has long since arrived.
+ *
+ * How many fill a screen is a question about the screen. Three does it on a
+ * tall monitor with one to spare. A phone shows exactly one — the tiles and
+ * the toolbar take the top of the page, and a group is a heading and five
+ * rows two lines tall — so building three there was building two that nobody
+ * could see, in the very commit the Back button was waiting on. Measured at
+ * 375x812 against the same build at 1280: one width arrived with the thread
+ * free, the other spent fifty to sixty-five milliseconds of it, every time.
+ *
+ * Split at `md`, which is where the row itself changes shape: above it a row
+ * is one line with its vendor, progress and status in columns, below it two
+ * with them folded onto a footer.
  */
-const EAGER_GROUPS = 3;
+const EAGER_GROUPS_WIDE = 3;
+const EAGER_GROUPS_NARROW = 1;
+const WIDE_ROWS = '(min-width: 48rem)';
 
 /** Clearance left above the list when Show scrolls to it: the sticky bar plus
  *  a little air, so the first group heading is not welded to the rule. */
@@ -202,7 +218,10 @@ export default function OverviewPage({
    *  task of its own, none of them long, and the browser is free to answer a
    *  finger in between. Nothing about the total work changes; only whether it
    *  can be interrupted. */
-  const [shownGroups, setShownGroups] = useState(EAGER_GROUPS);
+  const wideRows = useMediaQuery(WIDE_ROWS);
+  const [shownGroups, setShownGroups] = useState(
+    wideRows ? EAGER_GROUPS_WIDE : EAGER_GROUPS_NARROW,
+  );
 
   useEffect(() => {
     if (shownGroups === grouped.length) return;
