@@ -264,9 +264,24 @@ export default function ProcurementApp() {
     startPageSwap(() => setPage(p));
   }, [startPageSwap]);
 
+  /** Which row this screen was opened from goes in with the swap, not ahead
+   *  of it.
+   *
+   *  Set on its own it was an urgent update, and an urgent update to
+   *  `lastOpenedId` is a prop change on every group card in the list: eight
+   *  of them render again, each pager works out afresh which page holds the
+   *  row, and the one that does rebuilds its carousel's context. All of it
+   *  synchronous, all of it in the moment the finger goes down, and all of it
+   *  to arrange a list that is about to be replaced. The transition then
+   *  began on a thread that had just been made busy — which is the stutter on
+   *  the way into an item.
+   *
+   *  Inside the transition it is the same work, deferred and batched with the
+   *  swap it belongs to, and nobody is waiting on it: the value is only read
+   *  again on the way back. */
   const openDetail = useCallback((item: ProcurementItem) => {
-    setLastOpenedId(item.id);
     startPageSwap(() => {
+      setLastOpenedId(item.id);
       setDetailItem(item);
       setPage('itemDetail');
     });

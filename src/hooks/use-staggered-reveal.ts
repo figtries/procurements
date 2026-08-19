@@ -1,4 +1,16 @@
-import { startTransition, useEffect, useState } from 'react';
+import { startTransition, useEffect, useRef, useState } from 'react';
+
+/**
+ * How long the first piece waits before the rest begin.
+ *
+ * A page swap is animated, and the animation is 70ms of hold and 150ms of
+ * arrival. Raising the rest of the page during those is asking the browser to
+ * animate and React to commit on the same thread at the same time, and the
+ * animation is the one that loses — it is the half nobody can interrupt and
+ * everybody can see. Waiting until the swap has landed costs nothing: what is
+ * waiting is below the fold either way.
+ */
+const AFTER_THE_SWAP = 260;
 
 /**
  * How many of a page's pieces may be built so far, raised one at a time.
@@ -29,6 +41,10 @@ import { startTransition, useEffect, useState } from 'react';
 export function useStaggeredReveal(total: number, eager: number): number {
   const [shown, setShown] = useState(eager);
 
+  /** Only the first step waits; after that they follow one another as fast as
+   *  the thread allows. */
+  const begun = useRef(false);
+
   useEffect(() => {
     if (shown === total) return;
     // A timer rather than `requestIdleCallback`: idle callbacks are scheduled
@@ -37,8 +53,11 @@ export function useStaggeredReveal(total: number, eager: number): number {
     // task is the whole point, and any timeout does that. Non-urgent, so React
     // may slice it and keep the part it has already handed over responsive.
     const id = window.setTimeout(
-      () => startTransition(() => setShown(n => (n > total ? total : n + 1))),
-      0,
+      () => {
+        begun.current = true;
+        startTransition(() => setShown(n => (n > total ? total : n + 1)));
+      },
+      begun.current ? 0 : AFTER_THE_SWAP,
     );
     return () => window.clearTimeout(id);
   }, [shown, total]);

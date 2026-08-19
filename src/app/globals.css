@@ -466,6 +466,12 @@
      to read as travel. */
   --vt-rise: 8px;
 
+  /* A page of a list sliding aside is the one movement here that is really
+     travel: a whole column of rows leaves and another takes its place, and
+     the eye follows it the whole way. So it is given longer than a fade —
+     but it is a curve, not a decay, and it arrives. */
+  --slide: 300ms;
+
   /* Decelerate into place and stop. No overshoot, no settle: both are things
      the eye has to follow, and there is nothing here worth following. */
   --vt-soft: cubic-bezier(0.2, 0, 0, 1);

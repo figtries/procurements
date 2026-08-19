@@ -91,13 +91,57 @@ function Carousel({
     setCanScrollNext(api.canScrollNext())
   }, [])
 
-  const scrollPrev = React.useCallback(() => {
-    api?.scrollPrev()
+  /**
+   * Move a page under a curve of our own choosing.
+   *
+   * Embla animates by integrating a friction model once a frame: velocity
+   * gains displacement/duration and is then multiplied by a constant the
+   * engine keeps to itself. That shape starts at its fastest and decays
+   * towards the target, so there is no ramp into the movement at all — it is
+   * the motion of something released rather than something moved, which is
+   * what reads as cheap however fast it is made to run. Nor can it be given a
+   * curve: duration is the only handle, and friction is not an option.
+   *
+   * So the arrows do not use it. The page is jumped to instantly, which puts
+   * the track's transform at its final value in one go, and a CSS transition
+   * carries it there under `--vt-soft` — the same decelerate every other
+   * arrival on the screen is drawn with. On the compositor, too, so a phone
+   * animates it without asking the main thread for anything.
+   *
+   * The transition is put on for the press and taken off again after, so a
+   * finger on the track is never transitioned: a drag has to track the hand
+   * exactly, and embla's own settle after a release has to stay its own.
+   */
+  const glide = React.useCallback((move: (jump: boolean) => void) => {
+    const el = api?.containerNode()
+    if (!el) return
+
+    el.style.transition = "transform var(--slide, 300ms) var(--vt-soft, ease-out)"
+    move(true)
+
+    const clear = () => {
+      el.style.transition = ""
+      el.removeEventListener("transitionend", clear)
+      el.removeEventListener("pointerdown", clear)
+    }
+    el.addEventListener("transitionend", clear)
+    // A hand arriving mid-glide takes the rule off before it can ease a drag:
+    // a finger on the track has to be followed exactly, not caught up with.
+    el.addEventListener("pointerdown", clear, { passive: true })
+    // A transition that never starts — the page was already there, or the tab
+    // is not drawing — would otherwise leave the rule on for the next drag.
+    window.setTimeout(clear, 600)
   }, [api])
 
+  const scrollPrev = React.useCallback(() => {
+    if (!api) return
+    glide(jump => api.scrollPrev(jump))
+  }, [api, glide])
+
   const scrollNext = React.useCallback(() => {
-    api?.scrollNext()
-  }, [api])
+    if (!api) return
+    glide(jump => api.scrollNext(jump))
+  }, [api, glide])
 
   const handleKeyDown = React.useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
