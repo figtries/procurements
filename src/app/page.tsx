@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  ViewTransition, useCallback, useEffect, useLayoutEffect, useMemo, useState, useTransition,
+  useCallback, useEffect, useLayoutEffect, useMemo, useState, useTransition,
 } from 'react';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
@@ -91,7 +91,8 @@ function groupItems(list: ProcurementItem[], groupBy: GroupBy) {
 export default function ProcurementApp() {
   const [page, setPage] = useState<PageName>('dashboard');
 
-  /** Routing state runs through a transition so <ViewTransition> can animate it. */
+  /** Routing state runs through a transition so React may render the page it
+   *  is being sent to without blocking the one on screen. */
   const [, startNav] = useTransition();
 
   /* ── Data state (lazily initialised to avoid cascading renders) ── */
@@ -685,7 +686,10 @@ export default function ProcurementApp() {
             ever sees it bite — at which point a line of text has grown long
             enough that stopping is the kinder choice. */}
         <main className="mx-auto w-full max-w-[1440px] px-4 pt-5 pb-[calc(4rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 sm:pb-24 lg:px-8 xl:px-10 2xl:px-12">
-          <ViewTransition key={page} name="app-page" share="auto" enter="auto" exit="auto" default="none">
+          {/* Keyed on the page so the arrival runs again on every swap. See
+              .page-arrive, which replaced a snapshot that could not be made to
+              behave between pages of such different heights. */}
+          <div key={page} className="page-arrive">
             <div>
               {page === 'dashboard' && (
                 <DashboardPage
@@ -754,7 +758,7 @@ export default function ProcurementApp() {
                 />
               )}
             </div>
-          </ViewTransition>
+          </div>
         </main>
       </SidebarInset>
 

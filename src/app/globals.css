@@ -477,7 +477,6 @@
   --vt-soft: cubic-bezier(0.2, 0, 0, 1);
 }
 
-::view-transition-group(app-page),
 ::view-transition-group(item-list),
 ::view-transition-group(lookahead) {
   /* Pages differ wildly in height, and a box that morphs between the two
@@ -486,7 +485,6 @@
   animation: none;
 }
 
-::view-transition-image-pair(app-page),
 ::view-transition-image-pair(item-list),
 ::view-transition-image-pair(lookahead) {
   /* The UA isolates the pair so an overlapping crossfade can hold its
@@ -495,14 +493,13 @@
   isolation: auto;
 }
 
-::view-transition-old(app-page),
-::view-transition-new(app-page),
 ::view-transition-old(item-list),
 ::view-transition-new(item-list),
 ::view-transition-old(lookahead),
 ::view-transition-new(lookahead) {
   mix-blend-mode: normal;
 }
+
 
 /* Every swap is the same gesture, whether it changes the whole screen or
    one list inside it: the old view leaves, then the new one fades up from
@@ -513,12 +510,10 @@
    paper the handover is cleaner the other way round; on screen it left a
    frame or two of bare background between the two pages, and a gap in the
    middle of a movement is exactly what gets read as the button hesitating. */
-::view-transition-old(app-page),
 ::view-transition-old(item-list),
 ::view-transition-old(lookahead) {
   animation: var(--vt-out) ease-out both vt-fade-out;
 }
-::view-transition-new(app-page),
 ::view-transition-new(item-list),
 ::view-transition-new(lookahead) {
   animation:
@@ -539,6 +534,33 @@
   animation-name: vt-fade-in;
   animation-duration: 120ms;
   animation-delay: 40ms;
+}
+
+/* A whole screen changing does not go through a snapshot.
+ *
+ * It used to. Naming the page area meant the browser photographed it, and
+ * Chrome photographs the whole of a named element rather than the part of it
+ * on screen — measured, the cost of a swap rose with the height of the page
+ * and vanished when the list was empty. The list runs past five thousand
+ * pixels on a phone and an item's screen is around two, so that picture was
+ * then drawn into a box of quite another size, and what showed for the length
+ * of the fade was not the part of the list anyone had been looking at. That
+ * was the flash on the way into an item: the right picture, the wrong shape,
+ * in the wrong place.
+ *
+ * Nothing here needs a photograph. The page that is leaving is leaving, and
+ * the one arriving is in the document from its first frame — it only has to
+ * arrive softly. So it does that itself, with the same rise and the same
+ * curve the snapshots were given, and there is no geometry left to get wrong
+ * on any screen of any size.
+ *
+ * Started a third of the way up rather than from nothing, so no frame of it
+ * is ever bare ground. */
+.page-arrive {
+  animation: var(--vt-in) var(--vt-soft) both page-arrive;
+}
+@keyframes page-arrive {
+  from { opacity: 0.35; transform: translateY(var(--vt-rise)); }
 }
 
 @keyframes vt-fade-out { to   { opacity: 0; } }
