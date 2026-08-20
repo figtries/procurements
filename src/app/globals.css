@@ -445,12 +445,15 @@
 :root {
   view-transition-name: none;
 
-  /* One vocabulary for every swap, and a short one. This is a tool people
-     work in all day: a transition is here to say the screen changed, not to
-     be watched. Anything long enough to notice twice is long enough to wait
-     on the third time. */
-  --vt-out: 90ms;
-  --vt-in: 150ms;
+  /* One vocabulary for every swap. This is a tool people work in all day, so
+     a transition is here to say the screen changed, not to be watched — but
+     short is not the same as soft. At ninety milliseconds out and a hundred
+     and fifty in, the fade was over before the eye had finished moving, and
+     what read was not speed but a snap: the page looked replaced rather than
+     changed. Given room to run, the same gesture lands instead of arriving
+     already finished, and it is still gone inside half a second. */
+  --vt-out: 170ms;
+  --vt-in: 320ms;
 
   /* When the incoming view starts, measured from the same instant the
      outgoing one begins leaving.
@@ -459,22 +462,28 @@
      screen is briefly nothing but background, which is the flicker the swap
      reads as. Twenty milliseconds of overlap closes that gap while the old
      view is already down to a tenth of its opacity: too faint to read a
-     second page through, which is the thing the exit is separate for. */
-  --vt-hold: 70ms;
+     second page through, which is the thing the exit is separate for. The
+     overlap grows with the fade it sits inside — the same fraction of it,
+     not the same handful of milliseconds. */
+  --vt-hold: 130ms;
 
   /* Barely a movement — enough to give the change a direction, not enough
-     to read as travel. */
-  --vt-rise: 8px;
+     to read as travel. Held to eight pixels the slower rise reads as
+     hesitation rather than motion, so the distance grows with the time. */
+  --vt-rise: 14px;
 
   /* A page of a list sliding aside is the one movement here that is really
      travel: a whole column of rows leaves and another takes its place, and
      the eye follows it the whole way. So it is given longer than a fade —
      but it is a curve, not a decay, and it arrives. */
-  --slide: 300ms;
+  --slide: 380ms;
 
-  /* Decelerate into place and stop. No overshoot, no settle: both are things
-     the eye has to follow, and there is nothing here worth following. */
-  --vt-soft: cubic-bezier(0.2, 0, 0, 1);
+  /* Ease out of rest, then decelerate into place and stop. No overshoot, no
+     settle: both are things the eye has to follow, and there is nothing here
+     worth following. The old curve left a standstill at full speed, which is
+     what made a swap feel struck rather than moved; this one spends the first
+     few milliseconds getting going and the rest slowing down. */
+  --vt-soft: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 ::view-transition-group(item-list),
@@ -512,12 +521,12 @@
    middle of a movement is exactly what gets read as the button hesitating. */
 ::view-transition-old(item-list),
 ::view-transition-old(lookahead) {
-  animation: var(--vt-out) ease-out both vt-fade-out;
+  animation: var(--vt-out) ease-in-out both vt-fade-out;
 }
 ::view-transition-new(item-list),
 ::view-transition-new(lookahead) {
   animation:
-    var(--vt-in) ease-out var(--vt-hold) both vt-fade-in,
+    var(--vt-in) ease-in-out var(--vt-hold) both vt-fade-in,
     var(--vt-in) var(--vt-soft) var(--vt-hold) both vt-arrive;
 }
 
@@ -528,12 +537,12 @@
    the old set going and the new one coming. What is left reads as the list
    settling rather than as a beat of waiting after the click. */
 ::view-transition-old(item-list) {
-  animation-duration: 60ms;
+  animation-duration: 120ms;
 }
 ::view-transition-new(item-list) {
   animation-name: vt-fade-in;
-  animation-duration: 120ms;
-  animation-delay: 40ms;
+  animation-duration: 240ms;
+  animation-delay: 80ms;
 }
 
 /* A whole screen changing does not go through a snapshot.
@@ -560,7 +569,7 @@
   animation: var(--vt-in) var(--vt-soft) both page-arrive;
 }
 @keyframes page-arrive {
-  from { opacity: 0.35; transform: translateY(var(--vt-rise)); }
+  from { opacity: 0.25; transform: translateY(var(--vt-rise)); }
 }
 
 @keyframes vt-fade-out { to   { opacity: 0; } }
