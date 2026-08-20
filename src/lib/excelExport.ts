@@ -212,24 +212,6 @@ function buildSummary(
     r += 1;
   }
 
-  /* Sign-off strip, left blank for wet signatures. */
-  r += 2;
-  const roles = ['Prepared by', 'Checked by', 'Approved by'];
-  const cols = [1, 3, 5];
-  roles.forEach((role, i) => {
-    const c = sheet.getCell(r, cols[i]);
-    c.value = role;
-    c.font = body();
-  });
-  const signRow = r + 4;
-  roles.forEach((_, i) => {
-    const c = sheet.getCell(signRow, cols[i]);
-    if (i === 0 && project?.pic) c.value = project.pic;
-    c.font = body({ bold: true });
-    c.border = { top: { style: 'thin', color: { argb: BLACK } } };
-    sheet.getCell(signRow, cols[i] + 1).border = { top: { style: 'thin', color: { argb: BLACK } } };
-  });
-
   printSetup(sheet, 1, `${project?.name ?? 'Procurement'} | summary`);
 }
 
