@@ -452,8 +452,8 @@
      what read was not speed but a snap: the page looked replaced rather than
      changed. Given room to run, the same gesture lands instead of arriving
      already finished, and it is still gone inside half a second. */
-  --vt-out: 170ms;
-  --vt-in: 320ms;
+  --vt-out: 200ms;
+  --vt-in: 340ms;
 
   /* When the incoming view starts, measured from the same instant the
      outgoing one begins leaving.
@@ -465,12 +465,23 @@
      second page through, which is the thing the exit is separate for. The
      overlap grows with the fade it sits inside — the same fraction of it,
      not the same handful of milliseconds. */
-  --vt-hold: 130ms;
+  --vt-hold: 140ms;
 
   /* Barely a movement — enough to give the change a direction, not enough
      to read as travel. Held to eight pixels the slower rise reads as
      hesitation rather than motion, so the distance grows with the time. */
-  --vt-rise: 14px;
+  --vt-rise: 18px;
+
+  /* A whole page arriving gets its own pair of timings, longer than the ones
+     a list inside it gets. It is the largest thing on screen that moves, and
+     the same duration that settles a column of rows reads as a jolt when it
+     is the entire view. The two run at different lengths on purpose: the
+     opacity is done early, so the page is readable almost at once, and the
+     movement keeps going underneath it and comes to rest on its own. A fade
+     and a travel finishing on the same frame is what makes a swap land as one
+     event — a snap — instead of settling. */
+  --vt-page-fade: 300ms;
+  --vt-page-rise: 520ms;
 
   /* A page of a list sliding aside is the one movement here that is really
      travel: a whole column of rows leaves and another takes its place, and
@@ -478,12 +489,17 @@
      but it is a curve, not a decay, and it arrives. */
   --slide: 380ms;
 
-  /* Ease out of rest, then decelerate into place and stop. No overshoot, no
-     settle: both are things the eye has to follow, and there is nothing here
-     worth following. The old curve left a standstill at full speed, which is
-     what made a swap feel struck rather than moved; this one spends the first
-     few milliseconds getting going and the rest slowing down. */
-  --vt-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Nearly all of the distance in the first third, then a long, flattening
+     tail into rest. No overshoot, no bounce: both are things the eye has to
+     follow, and there is nothing here worth following.
+
+     The curves before this one spent their time evenly across the movement,
+     which is why every duration tried under them read as either struck or
+     slow and never as soft — an even pace is a pace you can track, and a
+     movement you can track is one you are waiting on. Front-loading it means
+     the page is where it belongs before anyone looks for it, and the last
+     pixels of the settle are too slow to follow and too small to notice. */
+  --vt-soft: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 ::view-transition-group(item-list),
@@ -566,11 +582,26 @@
  * Started a third of the way up rather than from nothing, so no frame of it
  * is ever bare ground. */
 .page-arrive {
-  animation: var(--vt-in) var(--vt-soft) both page-arrive;
+  animation:
+    var(--vt-page-fade) ease-out both page-fade,
+    var(--vt-page-rise) var(--vt-soft) both page-rise;
 }
-@keyframes page-arrive {
-  from { opacity: 0.25; transform: translateY(var(--vt-rise)); }
-}
+
+/* From nothing, not from a quarter.
+ *
+ * This started at 0.35 and then 0.25, to keep a frame of bare background off
+ * the screen — the page that is leaving is unmounted by React in a single
+ * frame, so there is genuinely nothing behind this one. But a fade that
+ * begins part-way up does not begin: it *appears*, at a quarter strength, in
+ * one frame, and then fades the rest. That step is a harder edge than the gap
+ * it was covering, and it is the reason the swap read as fast no matter what
+ * the duration said — the eye was catching the jump, not the fade.
+ *
+ * So it starts at zero and climbs steeply instead. The first quarter of the
+ * fade covers more ground than the floor ever did, which leaves the gap just
+ * as short, and there is no edge anywhere in it. */
+@keyframes page-fade { from { opacity: 0; } }
+@keyframes page-rise { from { transform: translateY(var(--vt-rise)); } }
 
 @keyframes vt-fade-out { to   { opacity: 0; } }
 @keyframes vt-fade-in  { from { opacity: 0; } }
