@@ -583,13 +583,23 @@ export default function ProcurementApp() {
       if (fresh) setDetailItem(fresh);
     }
 
-    if (!applied.updated) {
+    if (!applied.updated && !applied.restored) {
       toast.info('Nothing to apply', { description: 'The form held no new information.' });
       return;
     }
+
+    /* A form can now update what is here and put back what is not, and a
+       toast naming only one of the two reads as the whole of what happened. */
+    const done: string[] = [];
+    if (applied.changed) {
+      done.push(`${applied.changed} change${applied.changed === 1 ? '' : 's'} across `
+        + `${applied.updated} item${applied.updated === 1 ? '' : 's'}`);
+    }
+    if (applied.restored) {
+      done.push(`${applied.restored} item${applied.restored === 1 ? '' : 's'} put back`);
+    }
     toast.success(`${result.vendor || 'Vendor'} form applied`, {
-      description: `${applied.changed} change${applied.changed === 1 ? '' : 's'} across `
-        + `${applied.updated} item${applied.updated === 1 ? '' : 's'}.`,
+      description: `${done.join(' · ')}.`,
     });
   }
 

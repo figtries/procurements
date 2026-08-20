@@ -255,7 +255,9 @@ function writeBody(
       cell.border = rule(
         'thin', c === FIRST_ITEM_COL ? 'medium' : 'thin', 'thin', c === span ? 'medium' : 'thin',
       );
-      cell.protection = { locked: !def.vendorEditable };
+      /* Tinted, not locked: the yellow cells are the ones we are asking for,
+         and the grey ones are there for context. A vendor who spots a wrong
+         quantity should be able to say so in the file they were sent. */
       fill(cell, def.vendorEditable ? INPUT : LOCKED);
       if (def.vendorEditable) applyValidation(cell, def);
     }
@@ -383,23 +385,13 @@ function buildForm(
       + `&R&"${FONT}"&8Page &P of &N`,
   };
 
-  // No password: the lock guides rather than keeps anyone out, and a password
-  // only earns a phone call. Sorting, filtering and inserting are all off —
-  // the importer reads this sheet by position, and a shifted row or column is
-  // how a date ends up recorded against the wrong item.
-  void sheet.protect('', {
-    selectLockedCells: true,
-    selectUnlockedCells: true,
-    formatCells: false,
-    formatColumns: true,
-    formatRows: false,
-    insertRows: false,
-    insertColumns: false,
-    deleteRows: false,
-    deleteColumns: false,
-    sort: false,
-    autoFilter: false,
-  });
+  /* The sheet is not protected.
+
+     A lock cannot tell a vendor correcting our typo from a vendor breaking
+     the file, and it stops both — so the one useful message never arrives,
+     and the reply comes by WhatsApp instead. Judging what came back is the
+     importer's job: it knows which fields are ours, which rules the dates
+     have to keep, and how to say a form has to be sent again. */
 
   buildMeta(wb, project, vendor, rows, revision, layout, scope);
   return wb;

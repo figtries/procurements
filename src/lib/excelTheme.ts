@@ -31,7 +31,11 @@ export const BAND   = 'FFF2F2F2'; // totals strip
 
 /** Fill marking a cell the vendor is meant to type into. */
 export const INPUT  = 'FFFFF9D6'; // soft yellow — "isi di sini"
-/** Fill marking a cell we own and the vendor must not change. */
+/**
+ * Fill marking a cell we own: the vendor may still type in it — nothing in
+ * the sheet is bolted down — but what they put there is read as a question
+ * rather than an answer.
+ */
 export const LOCKED = 'FFF2F2F2';
 
 export const FONT = 'Calibri';

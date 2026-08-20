@@ -11,6 +11,7 @@ import { DISCIPLINES, fmtDate } from '@/lib/procurement';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -22,6 +23,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+
+const DISCIPLINE_OPTIONS = DISCIPLINES.map(d => ({ value: d, label: d }));
 
 interface ImportModalProps {
   open: boolean;
@@ -121,11 +124,36 @@ export default function ImportModal({
   const vendorColumns   = vendor?.columns ?? [];
   const vendorSelected  = vendorColumns.filter(c => c.include && c.changes.length);
   const vendorChanges   = vendorSelected.reduce((n, c) => n + c.changes.length, 0);
+  const vendorHeld      = vendorColumns.filter(c => c.blocked).length;
+  /* Offered rather than ticked: putting an item back is the reader to decide. */
+  const vendorBack      = vendorColumns.filter(c => c.restore);
+  const vendorRestores  = vendorBack.filter(c => c.include).length;
+  const backNeedsDisc   = vendorBack.some(c => c.include && !c.restore?.discipline);
+  /* Restored columns carry no changes, so the tick list is not the same one. */
+  const vendorApply     = vendorColumns.filter(c => c.include && (c.changes.length || c.restore));
+
+  /* One button, two jobs — it says which, rather than leaving the reader to
+     find out by pressing it. */
+  const applyParts: string[] = [];
+  if (vendorChanges > 0) applyParts.push(`${vendorChanges} change${vendorChanges === 1 ? '' : 's'}`);
+  if (vendorRestores > 0) applyParts.push(`${vendorRestores} put back`);
+  const applyLabel = applyParts.length ? `Apply ${applyParts.join(' · ')}` : 'Apply';
 
   const toggleColumn = (index: number, include: boolean) => {
     setVendor(prev => prev && {
       ...prev,
       columns: prev.columns.map((c, i) => (i === index ? { ...c, include } : c)),
+    });
+  };
+
+  /* Discipline is ours to set, so the vendor form never carried one — an item
+     put back without it would land in no section at all. */
+  const setDiscipline = (index: number, discipline: string) => {
+    setVendor(prev => prev && {
+      ...prev,
+      columns: prev.columns.map((c, i) => (
+        i === index && c.restore ? { ...c, restore: { ...c.restore, discipline } } : c
+      )),
     });
   };
 
@@ -139,8 +167,8 @@ export default function ImportModal({
   /** The file was refused outright: there is nothing to review, only a reason. */
   const stuck = (vendor?.errors.length ?? 0) > 0
     || ((result?.errors.length ?? 0) > 0 && rows.length === 0);
-  /** A vendor form that got as far as being readable. */
-  const reviewing = !!vendor && !vendor.errors.length;
+  /** The file is one of ours, whether or not it survived being read. */
+  const isVendorForm = !!vendor;
 
   const setAll = (include: boolean) => {
     setResult(prev => prev && {
@@ -158,12 +186,12 @@ export default function ImportModal({
               while the error stands, the dialog keeps the heading it opened
               with rather than announcing a review that never happened. */}
           <DialogTitle>
-            {reviewing ? 'Vendor progress update'
+            {isVendorForm ? 'Vendor progress update'
               : scopeItem ? 'Import progress form'
                 : 'Import from Excel'}
           </DialogTitle>
           <DialogDescription>
-            {reviewing
+            {isVendorForm
               ? 'Only the cells the vendor was asked to fill are read. A blank cell means '
                 + 'no news, so nothing you already have is cleared.'
               : scopeItem
@@ -268,17 +296,41 @@ export default function ImportModal({
                 </div>
               </div>
 
-              {vendorChanges === 0 ? (
+              {vendorChanges === 0 && !vendorBack.length ? (
                 <p className="rounded-xl bg-muted/60 px-4 py-8 text-center text-sm text-muted-foreground">
                   This form matches what we already hold — nothing to apply.
                 </p>
               ) : (
-                <p className="mb-2.5 text-sm text-muted-foreground">
-                  <b className="text-foreground tabular">{vendorChanges}</b> change
-                  {vendorChanges === 1 ? '' : 's'} across{' '}
-                  <b className="text-foreground tabular">{vendorSelected.length}</b> item
-                  {vendorSelected.length === 1 ? '' : 's'}
+                /* A count that leaves out the columns it walked past reads as the
+                   whole story, and the cards saying otherwise sit further down the
+                   page than the eye goes. */
+                <p className="mb-2.5 flex flex-wrap gap-x-3 text-sm text-muted-foreground">
+                  {vendorChanges > 0 && (
+                    <span>
+                      <b className="text-foreground tabular">{vendorChanges}</b> change
+                      {vendorChanges === 1 ? '' : 's'} across{' '}
+                      <b className="text-foreground tabular">{vendorSelected.length}</b> item
+                      {vendorSelected.length === 1 ? '' : 's'}
+                    </span>
+                  )}
+                  {vendorBack.length > 0 && (
+                    <span className="text-atrisk-fg">
+                      <b className="tabular">{vendorBack.length}</b> item
+                      {vendorBack.length === 1 ? '' : 's'} to put back
+                    </span>
+                  )}
+                  {vendorHeld > 0 && (
+                    <span className="text-late-fg">
+                      <b className="tabular">{vendorHeld}</b> held back
+                    </span>
+                  )}
                 </p>
+              )}
+
+              {backNeedsDisc && (
+                <div className="mb-3 rounded-lg border border-atrisk/25 bg-atrisk-bg px-3.5 py-2.5 text-sm text-atrisk-fg">
+                  Pick a discipline for the item you are putting back — the form does not carry one.
+                </div>
               )}
 
               <div className="space-y-2.5">
@@ -287,17 +339,19 @@ export default function ImportModal({
                     key={column.itemId}
                     className={cn(
                       'rounded-xl border p-3.5 transition-colors',
-                      !column.changes.length && 'opacity-60',
-                      column.include && column.changes.length && 'bg-muted/30',
+                      !column.changes.length && !column.restore && 'opacity-60',
+                      column.include && 'bg-muted/30',
                       column.blocked && 'border-late/25 bg-late-bg',
                     )}
                   >
                     <div className="flex items-start gap-2.5">
-                      {column.changes.length > 0 && !column.blocked && (
+                      {(column.changes.length > 0 || column.restore) && !column.blocked && (
                         <Checkbox
                           checked={column.include}
                           onCheckedChange={v => toggleColumn(i, v === true)}
-                          aria-label={`Apply changes to ${column.desc}`}
+                          aria-label={column.restore
+                            ? `Put ${column.desc} back into the project`
+                            : `Apply changes to ${column.desc}`}
                           className="mt-0.5"
                         />
                       )}
@@ -321,6 +375,44 @@ export default function ImportModal({
                             </li>
                           ))}
                         </ul>
+
+                        {/* Everything below came out of the form itself. Discipline
+                            is the one the vendor was never asked for, so it is the
+                            one thing the reader has to supply. */}
+                        {column.restore && (
+                          <div className="mt-2 space-y-2">
+                            <p className="text-xs text-muted-foreground">
+                              {column.restore.qty} {column.restore.unit}
+                              {column.restore.poNo && ` · PO ${column.restore.poNo}`}
+                              {column.restore.vendor && ` · ${column.restore.vendor}`}
+                            </p>
+                            <div className="grid gap-2">
+                              <Label htmlFor={`restore-discipline-${column.itemId}`}>
+                                Discipline <span className="text-destructive">*</span>
+                              </Label>
+                              <Select
+                                items={DISCIPLINE_OPTIONS}
+                                /* Controlled from the first render: starting at
+                                   undefined and landing on a string is the switch
+                                   React warns about. */
+                                value={column.restore.discipline || null}
+                                onValueChange={v => setDiscipline(i, (v as string | null) ?? '')}
+                              >
+                                <SelectTrigger
+                                  id={`restore-discipline-${column.itemId}`}
+                                  className="w-full sm:w-[13rem]"
+                                >
+                                  <SelectValue placeholder="Select discipline" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {DISCIPLINES.map(d => (
+                                    <SelectItem key={d} value={d}>{d}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        )}
 
                         {column.blocked && column.changes.length > 0 && (
                           <p className="mt-1.5 text-xs font-semibold text-late-fg">
@@ -358,10 +450,14 @@ export default function ImportModal({
 
           {/* A refused file used to leave the dialog with nothing on it but the
               reason — the drop zone is gone by then, so the only way back was
-              to cancel and start again. */}
+              to cancel and start again.
+
+              It is the only thing left to do here, so it carries the weight:
+              Apply is gone by this point, and an outline button beneath a
+              refusal reads as a way out rather than as the next step. */}
           {stuck && (
             <div className="flex justify-center">
-              <Button variant="outline" onClick={reset}>
+              <Button onClick={reset}>
                 <Upload />
                 Choose another file
               </Button>
@@ -527,10 +623,10 @@ export default function ImportModal({
               only invites the reader to look for what would enable it. */}
           {stuck ? null : vendor ? (
             <Button
-              disabled={!vendorChanges}
-              onClick={() => { onConfirmVendor(vendor, vendorSelected); reset(); }}
+              disabled={(!vendorChanges && !vendorRestores) || backNeedsDisc}
+              onClick={() => { onConfirmVendor(vendor, vendorApply); reset(); }}
             >
-              {vendorChanges ? `Apply ${vendorChanges} change${vendorChanges === 1 ? '' : 's'}` : 'Apply'}
+              {applyLabel}
             </Button>
           ) : (
             <Button

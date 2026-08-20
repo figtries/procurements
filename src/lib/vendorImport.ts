@@ -5,7 +5,7 @@ import { type FormScope, VENDOR_SHEET, VENDOR_TEMPLATE_MARKER } from './vendorSh
 import { deriveStatus } from './procurement';
 import { loadExcelJS, newWorkbook } from './exceljs';
 import { blockers, validateItem } from './rules';
-import { appendEvents, diffItem } from './itemLog';
+import { appendEvents, createdEvent, diffItem } from './itemLog';
 
 /* ═══════════════════════════════════════════════════════════
    Reading a returned vendor form.
@@ -42,6 +42,19 @@ export interface VendorColumn {
    * be applied until the vendor sends a corrected form.
    */
   blocked?: boolean;
+  /**
+   * Something here has to be settled with the vendor: a cell of ours they
+   * typed over, or a value nobody can read. It does not stop the rest of the
+   * column landing — but a form holding nothing else is refused outright,
+   * rather than shown as a card with nothing to tick.
+   */
+  queried?: boolean;
+  /**
+   * The item is gone from the project and the form still carries every field
+   * the app printed into it, so it can be put back rather than typed in again.
+   * Ticking the column re-creates this record instead of updating one.
+   */
+  restore?: ProcurementItem;
   itemId: string;
   /** Description as we hold it, for the preview header. */
   desc: string;
@@ -233,32 +246,98 @@ export async function readVendorWorkbook(
     const col = Number(key.slice(4));
     const [itemId, poNo, desc] = value.split(' | ');
 
-    const item = byId.get(itemId);
-    if (!item) {
+    /* PO number and description are a second opinion on which item this column
+       is. Nothing in the sheet is locked, so one of them coming back changed is
+       a vendor correcting us, and it is read as such further down. Both changed
+       is a column that is no longer the column it was cut as — a rebuilt file,
+       or one whose columns were shuffled — and nothing read out of it can be
+       trusted, so that is settled before the item is even looked up. */
+    const sheetPo = cellText(sheet.getCell(rowOf.get('poNo') ?? 0, col).value);
+    const sheetDesc = cellText(sheet.getCell(rowOf.get('desc') ?? 0, col).value);
+    if (sheetPo !== poNo && sheetDesc !== desc) {
       result.columns.push({
-        include: false, itemId, desc: desc ?? '', blocked: true,
+        include: false, itemId, desc: desc ?? '', changes: [], blocked: true,
+        warnings: [
+          'Neither the PO number nor the description in this column matches the '
+          + 'item it was cut for, so there is no telling which equipment it is '
+          + 'about. Ask the vendor to fill in the form as it was sent.',
+        ],
+      });
+      continue;
+    }
+
+    /* The item may have been deleted, or deleted and typed in again — in which
+       case it is here under a new id, and the two locked cells have just proved
+       which one it is. Re-linking beats adding a second copy of equipment
+       already on the schedule. */
+    const item = byId.get(itemId) ?? items.find(i => sameItem(i, poNo, desc));
+
+    /* Still nothing, so the item really is gone. The form carries every field
+       the app printed into it, so it is offered back whole — unticked, because
+       deleting was deliberate and undoing it should be too. */
+    if (!item) {
+      const draft = restoreFrom(sheet, rowOf, col, itemId, projectId || result.projectId);
+      const broken = blockers(validateItem(draft));
+      result.columns.push({
+        include: false,
+        itemId,
+        desc: draft.desc || desc || '',
         changes: [],
-        warnings: ['This item is no longer in the project — it was probably deleted.'],
+        restore: broken.length ? undefined : draft,
+        blocked: broken.length > 0,
+        warnings: broken.length
+          ? broken.map(v => v.message)
+          : ['This item is no longer in the project. Tick it to put it back from this form.'],
       });
       continue;
     }
 
     const warnings: string[] = [];
+    let unreadable = false;
+    if (item.id !== itemId) {
+      warnings.push(
+        'This item was deleted and added again since the form went out; it was matched '
+        + 'back by PO number and description.',
+      );
+    }
 
-    /* The two locked cells are a second opinion on which item this column is.
-       If either drifted, the sheet was rebuilt by hand and the mapping cannot
-       be trusted. */
-    const sheetPo = cellText(sheet.getCell(rowOf.get('poNo') ?? 0, col).value);
-    const sheetDesc = cellText(sheet.getCell(rowOf.get('desc') ?? 0, col).value);
-    if (sheetPo !== poNo || sheetDesc !== desc) {
-      result.columns.push({
-        include: false, itemId, desc: item.desc, changes: [], blocked: true,
-        warnings: [
-          'The locked cells in this column no longer match the item it was cut '
-          + 'from, so it was skipped. Send the vendor a fresh form.',
-        ],
-      });
-      continue;
+    /* The cells we own are tinted grey rather than bolted shut, so a vendor who
+       spots a wrong quantity can say so. What comes back is reported, never
+       applied: these are contractual, and a PO number is not settled by
+       whoever typed last. The two can also disagree because we changed
+       something after the form went out, which is why it is put as a
+       disagreement rather than as a complaint. */
+    const disputed: string[] = [];
+    for (const [fieldKey, row] of rowOf) {
+      const def = FIELD_BY_KEY[fieldKey];
+      if (!def || def.vendorEditable) continue;
+
+      const raw = sheet.getCell(row, col).value;
+      // A cleared cell is a cell nobody filled in, not a correction to nothing.
+      if (cellText(raw) === '') continue;
+
+      let theirs: string;
+      if (def.kind === 'date') {
+        const date = readDate(raw);
+        if (!date) continue;
+        theirs = date;
+      } else if (def.kind === 'percent') {
+        const pct = readPercent(raw);
+        if (pct === null) continue;
+        theirs = String(pct);
+      } else {
+        theirs = cellText(raw);
+      }
+
+      const ours = String(readField(item, fieldKey) ?? '');
+      if (theirs === ours) continue;
+      disputed.push(`${labelOf(fieldKey)}: form says “${theirs}”, we hold “${ours || '—'}”`);
+    }
+    if (disputed.length) {
+      warnings.push(
+        `${disputed.join('; ')}. Those are ours to set, so nothing was applied for `
+        + 'them — settle which side is right, then send the vendor a fresh form.',
+      );
     }
 
     const changes: FieldChange[] = [];
@@ -276,6 +355,7 @@ export async function readVendorWorkbook(
         next = readDate(raw);
         if (next === null) {
           warnings.push(`${labelOf(fieldKey)}: "${cellText(raw)}" is not a date we can read.`);
+          unreadable = true;
           continue;
         }
       } else if (def.kind === 'percent') {
@@ -312,11 +392,12 @@ export async function readVendorWorkbook(
 
     result.columns.push({
       include: changes.length > 0 && broken.length === 0,
-      itemId,
+      itemId: item.id,
       desc: item.desc,
       changes,
       warnings,
       blocked: broken.length > 0,
+      queried: disputed.length > 0 || unreadable,
     });
   }
 
@@ -359,6 +440,23 @@ export async function readVendorWorkbook(
     }
   }
 
+  /* Nothing came back that can be looked at, and something is wrong with the
+     form: refuse it once, with the reason, rather than leaving a grey "nothing
+     to apply" sitting over a stack of red cards nobody can tick. Two readings
+     of the same file leave the reader deciding which one to believe.
+
+     A column held back over a rule keeps its card — the dates the vendor
+     reported are the whole point of opening the file. */
+  const readable = result.columns.some(c => c.changes.length || c.restore);
+  const stopped = result.columns.filter(c => c.blocked || c.queried);
+  if (!readable && stopped.length) {
+    for (const column of stopped) {
+      for (const warning of column.warnings) {
+        result.errors.push(column.desc ? `${column.desc} — ${warning}` : warning);
+      }
+    }
+  }
+
   return result;
 }
 
@@ -382,6 +480,65 @@ function sameName(a: string, b: string): boolean {
   return norm(a) === norm(b);
 }
 
+/**
+ * The same equipment under a different id.
+ *
+ * Both halves have to agree: a PO number can cover several line items, and two
+ * projects can carry the same description, so neither alone is proof.
+ */
+function sameItem(item: ProcurementItem, poNo: string, desc: string): boolean {
+  return sameName(item.poNo, poNo ?? '') && sameName(item.desc, desc ?? '');
+}
+
+/**
+ * Rebuild an item out of the form it was cut into.
+ *
+ * Every row the sheet holds is read, the locked ones included — what the vendor
+ * may type is only part of what is printed there. Discipline and payment terms
+ * are the two the form leaves out on purpose, so they come back empty and the
+ * import dialog asks for the discipline before the item lands.
+ */
+function restoreFrom(
+  sheet: ExcelJS.Worksheet,
+  rowOf: Map<ItemFieldKey, number>,
+  col: number,
+  id: string,
+  projectId: string,
+): ProcurementItem {
+  const milestone = () => ({ plan: '', forecast: '', actual: '', note: '' });
+  const draft: ProcurementItem = {
+    id, projectId,
+    desc: '', discipline: '', qty: 0, unit: '',
+    vendor: '', vendorPic: '', vendorPhone: '', brand: '', delivery: '',
+    poNo: '', poDate: '', statusNote: '', readinessDoc: 0, doNo: '', termOfPayment: '',
+    mfg: { plan: 0, actual: 0, note: '' },
+    fat: milestone(), rts: milestone(), mos: milestone(),
+    status: 'planning', progress: 0,
+    createdAt: new Date().toISOString(),
+    events: [],
+  };
+
+  for (const [key, row] of rowOf) {
+    const def = FIELD_BY_KEY[key];
+    if (!def) continue;
+    const raw = sheet.getCell(row, col).value;
+
+    if (def.kind === 'date') {
+      const date = readDate(raw);
+      if (date) writeField(draft, key, date);
+    } else if (def.kind === 'percent') {
+      const pct = readPercent(raw);
+      if (pct !== null) writeField(draft, key, String(pct));
+    } else {
+      const text = cellText(raw);
+      if (text) writeField(draft, key, text);
+    }
+  }
+
+  Object.assign(draft, deriveStatus(draft));
+  return draft;
+}
+
 function labelOf(key: ItemFieldKey): string {
   const def = FIELD_BY_KEY[key];
   const stage = STAGE_NAMES[key.split('.')[0]];
@@ -392,6 +549,8 @@ export interface ApplyResult {
   items: ProcurementItem[];
   updated: number;
   changed: number;
+  /** Items put back because they were no longer in the project. */
+  restored: number;
 }
 
 /**
@@ -409,10 +568,23 @@ export function applyVendorImport(
 ): ApplyResult {
   const at = new Date().toISOString();
   const byId = new Map(items.map(i => [i.id, i]));
-  let updated = 0, changed = 0;
+  let updated = 0, changed = 0, restored = 0;
 
   for (const column of columns) {
-    if (!column.include || !column.changes.length) continue;
+    if (!column.include) continue;
+
+    /* An item the project lost, put back as the form last saw it. It keeps the
+       id the form was cut against, so the same file still reads next time. */
+    if (column.restore) {
+      byId.set(column.restore.id, {
+        ...column.restore,
+        events: [createdEvent({ source: 'vendor-import', actor: result.vendor || 'Vendor', at })],
+      });
+      restored += 1;
+      continue;
+    }
+
+    if (!column.changes.length) continue;
     const before = byId.get(column.itemId);
     if (!before) continue;
 
@@ -432,5 +604,5 @@ export function applyVendorImport(
     changed += column.changes.length;
   }
 
-  return { items: [...byId.values()], updated, changed };
+  return { items: [...byId.values()], updated, changed, restored };
 }
