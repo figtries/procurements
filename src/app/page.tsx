@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  useCallback, useEffect, useLayoutEffect, useMemo, useState, useTransition,
+  useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition,
 } from 'react';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
@@ -24,10 +24,12 @@ import {
   loadActiveProject,
   loadItems,
   loadProjects,
+  loadSession,
   reconcileSeed,
   saveActiveProject,
   saveItems,
   saveProjects,
+  saveSession,
 } from '@/lib/store';
 import type { VendorColumn, VendorImportResult } from '@/lib/vendorImport';
 import { deriveStatus, STATUS_LABELS } from '@/lib/procurement';
@@ -89,7 +91,13 @@ function groupItems(list: ProcurementItem[], groupBy: GroupBy) {
 
 /* ─────────────── MAIN PAGE ─────────────── */
 export default function ProcurementApp() {
-  const [page, setPage] = useState<PageName>('dashboard');
+  /** Where this tab was before it was reloaded, read once and never again.
+   *
+   *  In state rather than in a bare call so it is read on the first render
+   *  and not on any of the ones after it — the value is a snapshot of a
+   *  moment that has already passed, and re-reading it later would hand back
+   *  a position the reader has since navigated away from. */
+  const [restored] = useState(loadSession);
 
   /** Routing state runs through a transition so React may render the page it
    *  is being sent to without blocking the one on screen. */
@@ -119,6 +127,33 @@ export default function ProcurementApp() {
     return DUMMY_PROJECT.id;
   });
 
+  /** The item the restored screen was showing, looked up while the list it
+   *  came from is still the one that was saved alongside it.
+   *
+   *  It may be gone — deleted in another tab, or dropped by a seed refresh
+   *  between the two loads. A missing item is not an error, it is simply a
+   *  screen there is nothing to put on. */
+  const [restoredItem] = useState<ProcurementItem | null>(() => (
+    restored?.itemId ? items.find(i => i.id === restored.itemId) ?? null : null
+  ));
+
+  /** The screen the app opens on.
+   *
+   *  A reload is not a fresh visit: nothing was finished, nothing was chosen
+   *  again, and the reader has the same thing in mind they had a second ago.
+   *  So it opens where it was left. Only a tab that has no memory of being
+   *  anywhere — a first visit, a new tab, a session that failed to load —
+   *  gets the dashboard, which is the right front door for someone arriving
+   *  rather than returning.
+   *
+   *  An item's screen with no item falls back to the list it was opened
+   *  from, which is where closing it would have led anyway. */
+  const [page, setPage] = useState<PageName>(() => {
+    if (!restored) return 'dashboard';
+    if (restored.page === 'itemDetail' && !restoredItem) return 'overview';
+    return restored.page;
+  });
+
   /* ── Overview filter / group ── */
   const [search, setSearch]             = useState('');
   const [filterStatus, setFilterStatus] = useState('');
@@ -127,14 +162,16 @@ export default function ProcurementApp() {
   const groupBy: GroupBy = 'discipline';
 
   /* ── Item detail ── */
-  const [detailItem, setDetailItem] = useState<ProcurementItem | null>(null);
+  const [detailItem, setDetailItem] = useState<ProcurementItem | null>(restoredItem);
 
   /** The item whose detail screen was opened last.
    *
    *  Coming back, the overview uses it to reopen the pager on the page that
    *  row is actually on, rather than dropping the reader back at page one of
-   *  a group they had already paged past. */
-  const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
+   *  a group they had already paged past. It is seeded on a reload for the
+   *  same reason it is kept during a session: someone put back on an item's
+   *  screen still came to it from a row somewhere down the list. */
+  const [lastOpenedId, setLastOpenedId] = useState<string | null>(restoredItem?.id ?? null);
 
   /* ── Item form modal ── */
   const [formOpen, setFormOpen]       = useState(false);
@@ -254,9 +291,75 @@ export default function ProcurementApp() {
    *  The outgoing snapshot is then taken where the reader actually left it,
    *  which is the honest thing for it to be a picture of; the group it is
    *  drawn in is pinned to its final size, so nothing about it moves. */
+  /** Where the next scroll lands. Zero every time but the first, which is
+   *  the one that carries the offset a reload was interrupted at. */
+  const pendingScroll = useRef(restored?.scrollY ?? 0);
+
   useLayoutEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, [page]);
+    // Nothing is on the page until `isMounted`, and scrolling a document that
+    // has no height is a request to scroll to zero however far down the offset
+    // says. So the first run is skipped without spending the offset, and the
+    // flip to mounted runs this again — by which point React has committed a
+    // page tall enough to have the position in it.
+    if (!isMounted) return;
+    const top = pendingScroll.current;
+    pendingScroll.current = 0;
+    window.scrollTo({ top, left: 0, behavior: 'instant' });
+  }, [page, isMounted]);
+
+  /** The browser's own scroll restoration has nothing to restore.
+   *
+   *  It runs shortly after load, and at that point this app has rendered
+   *  nothing — the tree is held back until `isMounted`, so the document is
+   *  its own height and there is nowhere to scroll to. Left on `auto` it
+   *  either does nothing or lands a stale offset on top of the one above,
+   *  depending on how the two happen to order. Turned off, the effect above
+   *  is the only thing that moves the page, which is the only way this is
+   *  predictable. Nothing is lost: the app has no history entries of its
+   *  own for the browser to be restoring between. */
+  useEffect(() => {
+    if (!('scrollRestoration' in window.history)) return;
+    const previous = window.history.scrollRestoration;
+    window.history.scrollRestoration = 'manual';
+    return () => { window.history.scrollRestoration = previous; };
+  }, []);
+
+  /** Record the place, so the next load has one to go back to.
+   *
+   *  Twice, for two different failures. On every swap, because a tab that
+   *  disappears without warning — a crash, a phone reclaiming memory — never
+   *  gets the chance to say goodbye, and a screen without its scroll offset
+   *  is still far better than the dashboard. And again on the way out, which
+   *  is the only moment the scroll position is worth reading: during a swap
+   *  it is always the top of a page nobody has looked at yet.
+   *
+   *  `pagehide` rather than `beforeunload`: the latter is ignored outright by
+   *  mobile browsers, which discard a backgrounded tab without ever firing
+   *  it. `visibilitychange` covers the case where the tab is never unloaded
+   *  at all, only hidden and later killed. */
+  const persist = useCallback(() => {
+    // Before the page exists, `scrollY` is zero regardless of where the reader
+    // was — writing then would overwrite the offset this load is on its way to
+    // restoring. Effects run after layout effects, so the first write that
+    // does happen is the one after the restore above, reading the position it
+    // just put back.
+    if (!isMounted) return;
+    saveSession({
+      page,
+      itemId: detailItem?.id ?? null,
+      scrollY: Math.round(window.scrollY),
+    });
+  }, [page, detailItem, isMounted]);
+
+  useEffect(() => {
+    persist();
+    window.addEventListener('pagehide', persist);
+    document.addEventListener('visibilitychange', persist);
+    return () => {
+      window.removeEventListener('pagehide', persist);
+      document.removeEventListener('visibilitychange', persist);
+    };
+  }, [persist]);
 
   const nav = useCallback((p: PageName) => {
     // Leaving the list-and-detail pair behind: there is no list to come

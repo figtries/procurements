@@ -1,4 +1,4 @@
-import type { Project, ProcurementItem } from '@/types';
+import type { PageName, Project, ProcurementItem } from '@/types';
 
 const PROJECTS_KEY = 'figtries_projects';
 const ITEMS_KEY = 'figtries_items';
@@ -99,6 +99,68 @@ export function saveActiveProject(id: string | null): void {
     localStorage.setItem(ACTIVE_PROJECT_KEY, id);
   } else {
     localStorage.removeItem(ACTIVE_PROJECT_KEY);
+  }
+}
+
+/* ─────────────── where this tab was ───────────────
+   Which screen was open, which item was on it, and how far down it had been
+   read. Written so a reload puts the reader back rather than at the front
+   door — losing your place is the one cost of a refresh nobody chooses to
+   pay, and on a list this long it means finding it again by hand.
+
+   Kept in sessionStorage, not localStorage, and the difference matters. This
+   is not a preference; it is the state of one tab mid-thought. A reload is
+   the same tab carrying on, and sessionStorage survives it. Opening the app
+   fresh tomorrow is not, and landing on the detail screen of an item chosen
+   last week — with no memory of choosing it — reads as the app being lost
+   rather than helpful. That visit starts at the dashboard, where it should.
+
+   Everything here is a hint about presentation. Nothing in it is data: the
+   items, the projects and which project is active are all in localStorage
+   already and are unaffected by any of this. So it is only ever read through
+   a guard, and anything unrecognised is discarded rather than repaired — a
+   session that fails to load costs one reader one scroll position. */
+const SESSION_KEY = 'figtries_session';
+
+const PAGES: readonly PageName[] = ['dashboard', 'overview', 'projects', 'itemDetail'];
+
+export type AppSession = {
+  page: PageName;
+  /** The item the detail screen was showing, if that is the screen it was. */
+  itemId: string | null;
+  scrollY: number;
+};
+
+export function loadSession(): AppSession | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    const { page, itemId, scrollY } = parsed as Partial<AppSession>;
+    // A page name that no longer exists in the build — renamed, removed, or
+    // never ours to begin with — is not a page to send anyone to.
+    if (!page || !PAGES.includes(page)) return null;
+
+    return {
+      page,
+      itemId: typeof itemId === 'string' ? itemId : null,
+      scrollY: typeof scrollY === 'number' && scrollY > 0 ? scrollY : 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveSession(session: AppSession): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {
+    // A full or blocked store is not worth a broken navigation. The reader
+    // simply lands where they would have landed before any of this existed.
   }
 }
 
