@@ -104,8 +104,10 @@ function Carousel({
    *
    * So the arrows do not use it. The page is jumped to instantly, which puts
    * the track's transform at its final value in one go, and a CSS transition
-   * carries it there under `--vt-soft` — the same decelerate every other
-   * arrival on the screen is drawn with. On the compositor, too, so a phone
+   * carries it there under `--slide-ease` — a decelerate of its own, kept
+   * apart from the one the fades use because a column of text crossing the
+   * card is travel and wants to be seen making the journey, where a fade
+   * only wants to be over. On the compositor, too, so a phone
    * animates it without asking the main thread for anything.
    *
    * The transition is put on for the press and taken off again after, so a
@@ -132,7 +134,7 @@ function Carousel({
     // of the way in a single frame.
     release.current?.()
 
-    el.style.transition = "transform var(--slide, 300ms) var(--vt-soft, ease-out)"
+    el.style.transition = "transform var(--slide, 520ms) var(--slide-ease, ease-out)"
     move(true)
 
     let timer = 0
@@ -158,7 +160,12 @@ function Carousel({
     el.addEventListener("pointerdown", clear, { passive: true })
     // A transition that never starts — the page was already there, or the tab
     // is not drawing — would otherwise leave the rule on for the next drag.
-    timer = window.setTimeout(clear, 600)
+    //
+    // Well clear of `--slide`, which this has to outlast rather than race:
+    // the fallback is here for a movement that never began, and if it can
+    // come due while one is still running it becomes the very thing it is
+    // guarding against.
+    timer = window.setTimeout(clear, 1200)
 
     release.current = clear
   }, [api])

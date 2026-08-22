@@ -486,8 +486,25 @@
   /* A page of a list sliding aside is the one movement here that is really
      travel: a whole column of rows leaves and another takes its place, and
      the eye follows it the whole way. So it is given longer than a fade —
-     but it is a curve, not a decay, and it arrives. */
-  --slide: 380ms;
+     but it is a curve, not a decay, and it arrives.
+
+     Longer than it was, and on a curve of its own — see below. */
+  --slide: 520ms;
+
+  /* The slide is the one movement that must not be front-loaded.
+     `--vt-soft` puts nine tenths of the distance in the first third, which
+     is exactly right for something fading into place: it is where it belongs
+     before anyone looks for it. But under a column of text that is a
+     different event — the words are swapped almost on the frame of the
+     press, and the tail that follows is too small to read as travel. What is
+     left is a jump with a settle after it, which is the break the movement
+     was being read as.
+
+     This one still decelerates and still arrives without overshoot; it just
+     spends enough of its time in the middle of the journey for the rows to
+     be seen crossing rather than replaced. Nothing else on the screen uses
+     it: everything that fades stays on `--vt-soft`. */
+  --slide-ease: cubic-bezier(0.32, 0.72, 0, 1);
 
   /* Nearly all of the distance in the first third, then a long, flattening
      tail into rest. No overshoot, no bounce: both are things the eye has to
