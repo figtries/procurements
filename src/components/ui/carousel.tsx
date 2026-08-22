@@ -112,25 +112,55 @@ function Carousel({
    * finger on the track is never transitioned: a drag has to track the hand
    * exactly, and embla's own settle after a release has to stay its own.
    */
+  /** The clean-up belonging to the glide currently in the air, so the next
+   *  press can retire it rather than leave it running against the movement it
+   *  is about to start. */
+  const release = React.useRef<(() => void) | null>(null)
+
   const glide = React.useCallback((move: (jump: boolean) => void) => {
     const el = api?.containerNode()
     if (!el) return
 
+    // Hand over from whatever movement is still in the air, in the same task
+    // that starts the next one. A press landing mid-glide is meant to retarget
+    // the track — the browser carries the transition on from wherever it had
+    // got to — and the only thing that spoils that is a leftover from the
+    // press before taking the rule off underneath it. Which is what an arrow
+    // clicked twice in quick succession, the way one is on the way back to
+    // page one, was running into: the first press's fallback timer coming due
+    // in the middle of the second press's slide, dropping the track the rest
+    // of the way in a single frame.
+    release.current?.()
+
     el.style.transition = "transform var(--slide, 300ms) var(--vt-soft, ease-out)"
     move(true)
 
+    let timer = 0
     const clear = () => {
+      if (release.current === clear) release.current = null
       el.style.transition = ""
-      el.removeEventListener("transitionend", clear)
+      el.removeEventListener("transitionend", done)
       el.removeEventListener("pointerdown", clear)
+      window.clearTimeout(timer)
     }
-    el.addEventListener("transitionend", clear)
+
+    // `transitionend` bubbles, and this track is full of rows that transition
+    // things of their own — a hover colour, a chevron, a progress rail. Only
+    // the track's own transform finishing is this movement finishing; taking
+    // the rule off for anyone else's ends the slide early, at whatever point
+    // it had reached.
+    const done = (e: TransitionEvent) => {
+      if (e.target === el && e.propertyName === "transform") clear()
+    }
+    el.addEventListener("transitionend", done)
     // A hand arriving mid-glide takes the rule off before it can ease a drag:
     // a finger on the track has to be followed exactly, not caught up with.
     el.addEventListener("pointerdown", clear, { passive: true })
     // A transition that never starts — the page was already there, or the tab
     // is not drawing — would otherwise leave the rule on for the next drag.
-    window.setTimeout(clear, 600)
+    timer = window.setTimeout(clear, 600)
+
+    release.current = clear
   }, [api])
 
   const scrollPrev = React.useCallback(() => {
