@@ -277,40 +277,47 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
   // While the card is on screen there is no hurry at all: by the time an arrow
   // can be reached, the pages behind it have long since been drawn.
   //
-  // Bounded by the same observer that grants it. A page carrying one of these
-  // per group cannot hold a layer open for every one of them, so the layer
-  // lives exactly as long as the card is somewhere near the screen — one or
-  // two groups at a time on a phone — and is given back on the way out.
+  // Bounded, and this is where the two kinds of screen part company.
+  //
+  // The track lays every page out side by side, so the layer is three pages
+  // wide where only one of them can be seen. On a phone that is a small
+  // picture and holding one open for each card near the screen costs nothing.
+  // On a desktop it is the same picture drawn at the width of the window, and
+  // on a Mac at twice the density on top of that — measured against this
+  // list, 4.8MP a card where the same card on a 1× screen is 0.92MP. Times
+  // the four cards a tall window keeps near the viewport, that is 19MP of
+  // texture held open at rest, and past a certain point the tiles behind it
+  // start being handed back and rasterised again — during the movement,
+  // which is where they show. Narrowing the window fixed it, which is what
+  // told us the cost was the width all along.
+  //
+  // So a screen with a pointer does not need the observer at all: the pointer
+  // is on the card long before it reaches an arrow, and that is far more
+  // notice than the paint needs. One layer at a time, for the card actually
+  // being pointed at. A touch screen has no such warning and keeps the
+  // observer, which is what it was written for and where it was never the
+  // problem.
   React.useEffect(() => {
     const el = containerRef.current
     if (!el) return
 
-    // Two reasons to hold the layer, and it is held while either stands.
-    // Visibility is the one that does the work; the press is a fallback for
-    // the moment before the observer has had a chance to speak, and for any
-    // browser where it never does.
-    let onScreen = false
+    const root = el.closest<HTMLElement>('[data-slot="carousel"]')
+
+    // Three reasons to hold the layer, and it is held while any of them
+    // stands. Exactly one of the first two is ever in use on a given screen;
+    // the press is the fallback under both, for the moment before either has
+    // had a chance to speak and for any browser where neither does.
+    let near = false
+    let over = false
     let pressed: ReturnType<typeof setTimeout> | null = null
     const sync = () => {
-      el.style.willChange = onScreen || pressed ? "transform" : ""
+      el.style.willChange = near || over || pressed ? "transform" : ""
     }
-
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        onScreen = entry.isIntersecting
-        sync()
-      },
-      // A margin either side, so the painting is done while the card is still
-      // on its way up rather than in the moment it lands.
-      { rootMargin: "300px 0px" }
-    )
-    io.observe(el)
 
     // A pointer going down on an arrow is a beat ahead of the click it
     // becomes. Released on a timer rather than on "settle", so a touch that
     // moves nothing cannot leave the layer standing for good — which is what
     // an event about movement would do.
-    const root = el.closest<HTMLElement>('[data-slot="carousel"]')
     const press = (e: Event) => {
       const target = e.target as Element | null
       if (!target?.closest('[data-slot="carousel-previous"],[data-slot="carousel-next"]')) return
@@ -323,8 +330,68 @@ function CarouselContent({ className, ...props }: React.ComponentProps<"div">) {
     }
     root?.addEventListener("pointerdown", press, { passive: true })
 
+    // `pointerover`/`pointerout` rather than the enter/leave pair, and the
+    // carousel's own box is the reason: it is laid out as `contents` wherever
+    // the heading has to stay a child of the card, which leaves it no box to
+    // take a boundary crossing on. These bubble, so they arrive whatever the
+    // element is displayed as; the relatedTarget check is what turns a stream
+    // of them into the one crossing that matters.
+    const enter = () => {
+      if (over) return
+      over = true
+      sync()
+    }
+    const leave = (e: PointerEvent | FocusEvent) => {
+      const to = e.relatedTarget as Node | null
+      if (to && root?.contains(to)) return
+      over = false
+      sync()
+    }
+
+    let io: IntersectionObserver | null = null
+    // Keyboard included: focus reaching an arrow is the same warning a
+    // pointer arriving is, and someone paging with the arrow keys never
+    // hovers anything at all.
+    const hover = ["pointerover", "focusin"] as const
+    const rest = ["pointerout", "focusout"] as const
+
+    const hoverable = window.matchMedia("(hover: hover) and (pointer: fine)")
+    const arrange = () => {
+      io?.disconnect()
+      io = null
+      hover.forEach(t => root?.removeEventListener(t, enter as EventListener))
+      rest.forEach(t => root?.removeEventListener(t, leave as EventListener))
+      near = false
+      over = false
+
+      if (hoverable.matches) {
+        hover.forEach(t => root?.addEventListener(t, enter as EventListener))
+        rest.forEach(t => root?.addEventListener(t, leave as EventListener))
+      } else {
+        io = new IntersectionObserver(
+          ([entry]) => {
+            near = entry.isIntersecting
+            sync()
+          },
+          // A margin either side, so the painting is done while the card is
+          // still on its way up rather than in the moment it lands.
+          { rootMargin: "300px 0px" }
+        )
+        io.observe(el)
+      }
+      sync()
+    }
+
+    arrange()
+    // A trackpad joining a tablet, or a phone put into a dock, changes the
+    // answer while the page is standing.
+    hoverable.addEventListener("change", arrange)
+
     return () => {
-      io.disconnect()
+      hoverable.removeEventListener("change", arrange)
+      io?.disconnect()
+      hover.forEach(t => root?.removeEventListener(t, enter as EventListener))
+      rest.forEach(t => root?.removeEventListener(t, leave as EventListener))
       root?.removeEventListener("pointerdown", press)
       if (pressed) clearTimeout(pressed)
       el.style.willChange = ""
